@@ -6,15 +6,15 @@ using Distances
 using JuMP
 using HiGHS
 
-# Export main EMD functions
-export emd, emds, EMDParameters
-export process_event, prepare_event_for_emd
-
-# Include submodules
+# EMD functionality
 include("exact_solver.jl")
 include("emd.jl")
-include("utils.jl")
 include("distances.jl")
+export emd, emds, EMDParameters
+
+# Utility functions for event processing
+include("utils.jl")
+export process_event, prepare_event_for_emd
 
 # Package metadata
 const _PACKAGE_VERSION = VersionNumber("0.1.0")
