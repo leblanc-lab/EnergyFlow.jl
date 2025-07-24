@@ -22,3 +22,27 @@ docs/site/
 # committed for packages, but should be committed for applications that require a static
 # environment.
 Manifest.toml
+# Julia files
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+deps/deps.jl
+
+# Documentation build
+docs/build/
+docs/site/
+
+# Manifest is tracked for applications but not libraries
+Manifest.toml
+
+# System files
+.DS_Store
+
+# Development directories
+/HarryTest
+.DS_Store
+/docs
+/examples/emd/data/100k__files
+*.py
+/examples/emd/output
+/examples/emd/data
