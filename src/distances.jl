@@ -13,7 +13,7 @@ function compute_distance_matrix(coords1::Matrix{Float64}, coords2::Matrix{Float
     
     if params.measure == "euclidean"
         if params.periodic_phi && size(coords1, 2) >= 2
-            # Handle periodic phi (assuming phi is last column)
+            # Handle periodic phi
             phi_col = size(coords1, 2)
             
             for i in 1:n1
@@ -45,7 +45,7 @@ function compute_distance_matrix(coords1::Matrix{Float64}, coords2::Matrix{Float
             end
         end
     else
-        # Spherical measure (opening angles)
+        # Spherical
         for i in 1:n1
             for j in 1:n2
                 cos_angle = clamp(dot(coords1[i, :], coords2[j, :]), -1.0, 1.0)
@@ -54,7 +54,7 @@ function compute_distance_matrix(coords1::Matrix{Float64}, coords2::Matrix{Float
         end
     end
     
-    # Scale by R parameter
+    # Scale by R
     dist_matrix = dist_matrix / params.R
     
     return dist_matrix

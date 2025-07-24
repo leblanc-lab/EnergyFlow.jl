@@ -2,19 +2,13 @@ module EnergyFlow
 
 using LinearAlgebra
 using Statistics
-using OptimalTransport
 using Distances
 using JuMP
 using HiGHS
 
-# Exact solver is always available now
-const HAS_EXACT_SOLVER = Ref(true)
-const USE_EXACT_SOLVER = Ref(true)  # Default to exact solver
-
 # Export main EMD functions
 export emd, emds, EMDParameters
 export process_event, prepare_event_for_emd
-export has_exact_solver, check_solver_status, use_exact_solver!, use_sinkhorn!
 
 # Include submodules
 include("exact_solver.jl")

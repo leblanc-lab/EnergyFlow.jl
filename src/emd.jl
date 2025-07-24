@@ -56,63 +56,30 @@ function emd(event1::Matrix{Float64}, event2::Matrix{Float64};
              periodic_phi::Bool=false, n_iter_max::Int=100000,
              return_flow::Bool=false, kwargs...)
     
-    # Handle empty events
+    # Empty events
     if size(event1, 1) == 0 && size(event2, 1) == 0
         return return_flow ? (0.0, zeros(0, 0)) : 0.0
     elseif size(event1, 1) == 0 || size(event2, 1) == 0
         throw(ArgumentError("Cannot compute EMD between empty and non-empty events"))
     end
     
-    # Create parameters struct
     params = EMDParameters(R=R, beta=beta, norm=norm, measure=measure, 
                           coords=coords, periodic_phi=periodic_phi, n_iter_max=n_iter_max)
     
-    # Process events
     pTs1, coords1 = process_event(event1, params)
     pTs2, coords2 = process_event(event2, params)
     
-    # Compute distance matrix
     dist_matrix = compute_distance_matrix(coords1, coords2, params)
     
-    # Apply beta weighting
     if params.beta != 1.0
         dist_matrix = dist_matrix .^ params.beta
     end
     
-    # Handle normalization and dummy particles
     pTs1, pTs2, dist_matrix, scale_factor = handle_normalization(pTs1, pTs2, dist_matrix, params)
     
-    # Solve optimal transport problem
-    if EnergyFlow.USE_EXACT_SOLVER[]
-        # Use exact solver (default)
-        flow, cost = solve_emd_exact(pTs1, pTs2, dist_matrix)
-        # Apply scale factor back to get true EMD
-        cost = cost * scale_factor
-    else
-        # Use Sinkhorn approximation (if explicitly requested)
-        # Use better epsilon based on the scale of the problem
-        # Smaller epsilon gives more accurate results but slower convergence
-        max_dist = maximum(dist_matrix)
-        epsilon = max(1e-5, min(0.01, max_dist / 100))
-        
-        # Try Sinkhorn with adaptive parameters
-        try
-            flow = sinkhorn(pTs1, pTs2, dist_matrix, epsilon; 
-                          maxiter=params.n_iter_max,
-                          atol=1e-8,
-                          rtol=1e-6)
-            cost = sum(flow .* dist_matrix) * scale_factor
-        catch e
-            # If Sinkhorn fails, try with larger epsilon
-            @warn "Sinkhorn failed with epsilon=$epsilon, trying with larger value" exception=e
-            epsilon_fallback = max(0.1, max_dist / 10)
-            flow = sinkhorn(pTs1, pTs2, dist_matrix, epsilon_fallback; 
-                          maxiter=params.n_iter_max,
-                          atol=1e-6,
-                          rtol=1e-4)
-            cost = sum(flow .* dist_matrix) * scale_factor
-        end
-    end
+    # Solve optimal transport problem using exact solver
+    flow, cost = solve_emd_exact(pTs1, pTs2, dist_matrix)
+    cost = cost * scale_factor
     
     if return_flow
         return cost, flow
@@ -161,26 +128,20 @@ Process event for EMD calculation.
 function process_event(event::Matrix{Float64}, params::EMDParameters)
     event = copy(event)
     
-    # Handle coordinate conversion if needed
     converted_to_cartesian = false
     if params.measure != "euclidean" && params.coords == "hadronic"
         event = hadronic_to_cartesian(event)
         converted_to_cartesian = true
     end
     
-    # Extract weights and coordinates
     if size(event, 2) == 3 && !converted_to_cartesian
-        # Format: [pT, y, phi]
         weights = event[:, 1]
         coords = event[:, 2:3]
     elseif size(event, 2) == 4
-        # Format: [pT, y, phi, weight] or [E, px, py, pz]
         if params.coords == "cartesian" || converted_to_cartesian
-            # Cartesian: weights are energies
             weights = event[:, 1]
             coords = event[:, 2:4]
         else
-            # Hadronic with explicit weights
             weights = event[:, 1] .* event[:, 4]  # pT * weight
             coords = event[:, 2:3]
         end
@@ -188,20 +149,16 @@ function process_event(event::Matrix{Float64}, params::EMDParameters)
         error("Event must have 3 or 4 columns")
     end
     
-    # Normalize coordinates for spherical measure
     if params.measure != "euclidean"
         coords = normalize_coordinates(coords)
     elseif params.periodic_phi && size(coords, 2) >= 2
-        # Handle periodic phi (assuming phi is last column)
         coords[:, end] = mod.(coords[:, end], 2π)
     end
     
-    # Apply normalization if requested
     if params.norm && sum(weights) > 0
         weights = weights / sum(weights)
     end
     
-    # Add dummy particle for unbalanced transport
     if !params.norm
         weights = vcat(weights, 0.0)
         coords = vcat(coords, zeros(1, size(coords, 2)))
@@ -227,7 +184,6 @@ Prepare event data in the format expected by EMD functions.
 """
 function prepare_event_for_emd(event; pT_col=1, y_col=2, phi_col=3, weight_col=nothing)
     if isa(event, Matrix)
-        # Already in matrix format
         if weight_col === nothing
             return event[:, [pT_col, y_col, phi_col]]
         else
@@ -249,7 +205,6 @@ function hadronic_to_cartesian(event::Matrix{Float64})
     y = event[:, 2]
     phi = event[:, 3]
     
-    # For massless particles: E = pT * cosh(y)
     cartesian[:, 1] = pT .* cosh.(y)  # E
     cartesian[:, 2] = pT .* cos.(phi)  # px
     cartesian[:, 3] = pT .* sin.(phi)  # py
@@ -261,7 +216,6 @@ end
 function normalize_coordinates(coords::Matrix{Float64})
     """Normalize coordinate vectors for spherical measure"""
     norms = sqrt.(sum(coords.^2, dims=2))
-    # Avoid division by zero
     norms[norms .== 0] .= 1.0
     return coords ./ norms
 end
@@ -270,8 +224,8 @@ function handle_normalization(pTs1::Vector{Float64}, pTs2::Vector{Float64},
                             dist_matrix::Matrix{Float64}, params::EMDParameters)
     """Handle weight normalization and dummy particles"""
     
-    pT1_sum = sum(pTs1[1:end-1])  # Exclude dummy
-    pT2_sum = sum(pTs2[1:end-1])  # Exclude dummy
+    pT1_sum = sum(pTs1[1:end-1])
+    pT2_sum = sum(pTs2[1:end-1])
     scale_factor = 1.0
     
     if !params.norm
@@ -284,12 +238,11 @@ function handle_normalization(pTs1::Vector{Float64}, pTs2::Vector{Float64},
             dist_matrix[:, end] .= 1.0
         end
         
-        # Rescale for numerical stability
         rescale = max(pT1_sum, pT2_sum)
         if rescale > 0
             pTs1 = pTs1 / rescale
             pTs2 = pTs2 / rescale
-            scale_factor = rescale  # Store the scale factor to apply back later
+            scale_factor = rescale
             return pTs1, pTs2, dist_matrix, scale_factor
         end
     end
@@ -297,71 +250,6 @@ function handle_normalization(pTs1::Vector{Float64}, pTs2::Vector{Float64},
     return pTs1, pTs2, dist_matrix, scale_factor
 end
 
-# Solver functions (basic versions, extended by package extension)
+# Solver functions
 
-# This function will be defined by the package extension when JuMP and HiGHS are available
-# solve_emd_exact is defined in ext/EnergyFlowExactSolverExt.jl
-
-# Solver status functions
-
-"""
-    has_exact_solver()
-
-Check if the exact EMD solver (JuMP + HiGHS) is available.
-
-# Returns
-- `Bool`: true if exact solver is available, false otherwise
-"""
-function has_exact_solver()
-    return EnergyFlow.HAS_EXACT_SOLVER[]
-end
-
-"""
-    check_solver_status()
-
-Print detailed information about the available EMD solvers.
-"""
-function check_solver_status()
-    println("EnergyFlow.jl Solver Status")
-    println("===========================")
-    
-    println("✓ Exact solver (JuMP + HiGHS) is available")
-    println("  - This is now the default solver")
-    println("  - Provides exact optimal transport solutions")
-    
-    current_solver = EnergyFlow.USE_EXACT_SOLVER[] ? "Exact (JuMP/HiGHS)" : "Sinkhorn approximation"
-    println("\nCurrent solver: $current_solver")
-    
-    if !EnergyFlow.USE_EXACT_SOLVER[]
-        println("\nSinkhorn parameters:")
-        println("  - Adaptive epsilon based on distance matrix scale")
-        println("  - Max iterations: 100,000 (default)")
-        println("  - Tolerance: atol=1e-8, rtol=1e-6")
-    end
-    
-    println("\nTo switch solvers:")
-    println("  use_exact_solver!()   # Use exact solver (default)")
-    println("  use_sinkhorn!()       # Use Sinkhorn approximation")
-end
-
-"""
-    use_exact_solver!()
-
-Switch to using the exact linear programming solver (default).
-"""
-function use_exact_solver!()
-    EnergyFlow.USE_EXACT_SOLVER[] = true
-    println("Switched to exact solver (JuMP/HiGHS)")
-end
-
-"""
-    use_sinkhorn!()
-
-Switch to using the Sinkhorn approximation solver.
-Only use this if you need faster approximate solutions.
-"""
-function use_sinkhorn!()
-    EnergyFlow.USE_EXACT_SOLVER[] = false
-    println("Switched to Sinkhorn approximation")
-    println("Warning: Results may differ from exact solutions")
-end
+# solve_emd_exact is defined in src/exact_solver.jl
