@@ -133,7 +133,7 @@ function center_of_energy(event::Matrix{Float64}; coords="hadronic")
         else
             return [0.0, 0.0, 0.0]
         end
-    else
+    else 
         E = event[:, 1]
         total_E = sum(E)
         
