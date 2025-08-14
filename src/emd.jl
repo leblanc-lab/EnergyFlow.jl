@@ -55,32 +55,40 @@ function emd(event1::Matrix{Float64}, event2::Matrix{Float64};
              measure::String="euclidean", coords::String="hadronic",
              periodic_phi::Bool=false, n_iter_max::Int=100000,
              return_flow::Bool=false, kwargs...)
-    
+
+    # Validate that R and beta are positive
+    if R <= 0
+        throw(ArgumentError("R must be a positive value"))
+    end
+    if beta <= 0
+        throw(ArgumentError("beta must be a positive value"))
+    end
+
     # Empty events
     if size(event1, 1) == 0 && size(event2, 1) == 0
         return return_flow ? (0.0, zeros(0, 0)) : 0.0
     elseif size(event1, 1) == 0 || size(event2, 1) == 0
         throw(ArgumentError("Cannot compute EMD between empty and non-empty events"))
     end
-    
+
     params = EMDParameters(R=R, beta=beta, norm=norm, measure=measure, 
                           coords=coords, periodic_phi=periodic_phi, n_iter_max=n_iter_max)
-    
+
     pTs1, coords1 = process_event(event1, params)
     pTs2, coords2 = process_event(event2, params)
-    
+
     dist_matrix = compute_distance_matrix(coords1, coords2, params)
-    
+
     if params.beta != 1.0
         dist_matrix = dist_matrix .^ params.beta
     end
-    
+
     pTs1, pTs2, dist_matrix, scale_factor = handle_normalization(pTs1, pTs2, dist_matrix, params)
-    
+
     # Solve optimal transport problem using exact solver
     flow, cost = solve_emd_exact(pTs1, pTs2, dist_matrix)
     cost = cost * scale_factor
-    
+
     if return_flow
         return cost, flow
     else
@@ -127,43 +135,50 @@ Process event for EMD calculation.
 """
 function process_event(event::Matrix{Float64}, params::EMDParameters)
     event = copy(event)
-    
+
+    # Check if conversion to Cartesian coordinates is needed
     converted_to_cartesian = false
     if params.measure != "euclidean" && params.coords == "hadronic"
         event = hadronic_to_cartesian(event)
         converted_to_cartesian = true
     end
-    
+
+    # Extract weights and coordinates based on the event format
     if size(event, 2) == 3 && !converted_to_cartesian
+        # [pT, y, phi]
         weights = event[:, 1]
         coords = event[:, 2:3]
     elseif size(event, 2) == 4
+        # [t, x, y, z]
         if params.coords == "cartesian" || converted_to_cartesian
             weights = event[:, 1]
             coords = event[:, 2:4]
-        else
-            weights = event[:, 1] .* event[:, 4]  # pT * weight
+        else # [pT, y, phi, weight]
+            weights = event[:, 1] .* event[:, 4]  # Effective pT = pT * weight
             coords = event[:, 2:3]
         end
     else
         error("Event must have 3 or 4 columns")
     end
-    
+
     if params.measure != "euclidean"
         coords = normalize_coordinates(coords)
+    # Handle periodic boundary conditions for phi
     elseif params.periodic_phi && size(coords, 2) >= 2
         coords[:, end] = mod.(coords[:, end], 2π)
     end
-    
+
+    # Normalize weights to sum to 1 if required
     if params.norm && sum(weights) > 0
         weights = weights / sum(weights)
     end
-    
+
+    # Add a dummy zero-weight particle if weights are not normalized
     if !params.norm
         weights = vcat(weights, 0.0)
         coords = vcat(coords, zeros(1, size(coords, 2)))
     end
-    
+
     return weights, coords
 end
 

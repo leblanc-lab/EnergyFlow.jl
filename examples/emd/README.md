@@ -57,7 +57,8 @@ The negative weights example requires data files in the `data/` subdirectory:
 - `hadronization_dist2neg.csv` - Precomputed EMD distances for hadronization
 - `showered_dist2neg.csv` - Precomputed EMD distances for showered particles
 
-These files are included in the examples directory for convenience.
+To right now, to make sure the example work, you can download these files from [Rishabh's Cernbox](https://cernbox.cern.ch/index.php/s/3JqYHjvYJb4m7oL).
+In Future, we will provide smaller sample files directly in this repo.
 
 ## Notes
 
