@@ -1,6 +1,6 @@
 CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/wasserstein_wrapper.cpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/jlcxx.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/jlcxx.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/cassert \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__config \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__config_site \
@@ -14,6 +14,8 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_symbol_aliasing.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_posix_availability.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/ptrcheck.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_assert.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_bounds.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_static_assert.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/functional \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__functional/binary_function.h \
@@ -219,7 +221,6 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/stdlib.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/stdlib.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_stdlib.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_bounds.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_types.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/wait.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_types/_pid_t.h \
@@ -967,7 +968,7 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/stack \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/print \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/unistd.h \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/julia_headers.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/julia_headers.hpp \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_fasttls.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/platform.h \
@@ -991,24 +992,25 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/work-stealing-queue.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/stdalign.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_assert.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_assert.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_locks.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/jloptions.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_version.h \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/array.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/type_conversion.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/array.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/type_conversion.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/complex \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/typeindex \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/iostream \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/jlcxx_config.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/tuple.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/module.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/attr.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/smart_pointers.hpp \
-  /Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/include/jlcxx/stl.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/jlcxx_config.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/tuple.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/module.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/attr.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/smart_pointers.hpp \
+  /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/include/jlcxx/stl.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/valarray \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/set \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/unordered_set \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/list \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/forward_list \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/Wasserstein.hh \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/internal/CenterWeightedCentroid.hh \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/internal/EMDUtils.hh \
@@ -1202,7 +1204,6 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__chrono/zoned_time.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__chrono/ostream.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__chrono/parser_std_format_spec.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/forward_list \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__charconv/from_chars_floating_point.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__charconv/from_chars_result.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__charconv/from_chars_integral.h \

@@ -29,6 +29,7 @@ include("NetworkSimplexSolver.jl")
 # Try to load C++ wrapper, but make it optional
 const CXX_WRAPPER_AVAILABLE = try
     include("WassersteinCxx.jl")
+    using .WassersteinCxx
     true
 catch e
     @warn "C++ Wasserstein wrapper not available. Build it with: cd src/cxxwrap && ./build_wrapper.sh" exception=e

@@ -12,7 +12,7 @@ if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
     string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
            CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
   else()
-    set(CMAKE_INSTALL_CONFIG_NAME "Release")
+    set(CMAKE_INSTALL_CONFIG_NAME "")
   endif()
   message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
 endif()
@@ -50,7 +50,7 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
   if(EXISTS "$ENV{DESTDIR}/Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../libwasserstein_wrapper.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}/Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../libwasserstein_wrapper.dylib")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/harrywanghc/.julia/artifacts/a339b092561f57ff8cfb0fd8a100a8d5380695f6/lib"
+      -delete_rpath "/Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/lib"
       -delete_rpath "/Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/lib"
       "$ENV{DESTDIR}/Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../libwasserstein_wrapper.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
