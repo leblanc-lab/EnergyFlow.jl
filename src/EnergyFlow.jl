@@ -25,6 +25,7 @@ include("ExactSolver.jl")
 include("EMD.jl")
 include("Distances.jl")
 include("NetworkSimplexSolver.jl")
+using .Wasserstein
 
 # Try to load C++ wrapper, but make it optional
 const CXX_WRAPPER_AVAILABLE = try
