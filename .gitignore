@@ -11,3 +11,4 @@ Manifest.toml
 *.py
 /examples/emd/output
 /examples/emd/data
+/examples/benchmark/reference
