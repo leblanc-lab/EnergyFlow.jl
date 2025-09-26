@@ -4,7 +4,7 @@ using JuMP
 using HiGHS
 
 """
-    solve_emd_exact(a::Vector{Float64}, b::Vector{Float64}, C::Matrix{Float64})
+    solve_emd_exact(a::AbstractVector{Float64}, b::AbstractVector{Float64}, C::AbstractMatrix{Float64})
 
 Solve EMD using exact linear programming with JuMP and HiGHS.
 
@@ -17,7 +17,7 @@ Solve EMD using exact linear programming with JuMP and HiGHS.
 - `G`: Optimal transport plan (flow matrix)
 - `cost`: Total transport cost
 """
-function solve_emd_exact(a::Vector{Float64}, b::Vector{Float64}, C::Matrix{Float64})
+function solve_emd_exact(a::AbstractVector{Float64}, b::AbstractVector{Float64}, C::AbstractMatrix{Float64})
     n, m = length(a), length(b)
     
     # Create JuMP model with HiGHS optimizer

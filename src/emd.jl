@@ -24,10 +24,11 @@ Base.@kwdef struct EMDParameters
     n_iter_max::Int = 100000
 end
 
-"""
-    emd(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
 
-Compute the Earth Mover's Distance between two events.
+"""
+    emd_exact(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+
+Compute the Earth Mover's Distance between two events using the exact HiGHS solver.
 
 # Arguments
 - `event1`: First event as (M, 3) or (M, 4) matrix where M is multiplicity
@@ -50,11 +51,11 @@ For 4-column format: [pT, y, phi, weight]
 - `Float64`: EMD value
 - `Matrix{Float64}` (optional): Flow matrix if return_flow=true
 """
-function emd(event1::Matrix{Float64}, event2::Matrix{Float64}; 
-             R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
-             measure::String="euclidean", coords::String="hadronic",
-             periodic_phi::Bool=false, n_iter_max::Int=100000,
-             return_flow::Bool=false, kwargs...)
+function emd_exact(event1::Matrix{Float64}, event2::Matrix{Float64};
+                   R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
+                   measure::String="euclidean", coords::String="hadronic",
+                   periodic_phi::Bool=false, n_iter_max::Int=100000,
+                   return_flow::Bool=false, kwargs...)
 
     # Validate that R and beta are positive
     if R <= 0
@@ -70,25 +71,25 @@ function emd(event1::Matrix{Float64}, event2::Matrix{Float64};
     elseif size(event1, 1) == 0 || size(event2, 1) == 0
         throw(ArgumentError("Cannot compute EMD between empty and non-empty events"))
     end
-
+    
     params = EMDParameters(R=R, beta=beta, norm=norm, measure=measure, 
                           coords=coords, periodic_phi=periodic_phi, n_iter_max=n_iter_max)
-
+    
     pTs1, coords1 = process_event(event1, params)
     pTs2, coords2 = process_event(event2, params)
-
+    
     dist_matrix = compute_distance_matrix(coords1, coords2, params)
-
+    
     if params.beta != 1.0
         dist_matrix = dist_matrix .^ params.beta
     end
-
+    
     pTs1, pTs2, dist_matrix, scale_factor = handle_normalization(pTs1, pTs2, dist_matrix, params)
 
-    # Solve optimal transport problem using exact solver
+    # Always use HiGHS exact solver
     flow, cost = solve_emd_exact(pTs1, pTs2, dist_matrix)
     cost = cost * scale_factor
-
+    
     if return_flow
         return cost, flow
     else
@@ -97,88 +98,125 @@ function emd(event1::Matrix{Float64}, event2::Matrix{Float64};
 end
 
 """
-    emds(events::Vector{Matrix{Float64}}; kwargs...)
+    emds_exact(events::Vector{Matrix{Float64}}; kwargs...)
 
-Compute pairwise EMD matrix for a collection of events.
+Compute pairwise EMD matrix for a collection of events using the exact HiGHS solver.
 
 # Arguments
-- `events`: Vector of event matrices
+- `events`: Vector of event matrices, each as (M, 3) or (M, 4) matrix
 
 # Keywords
-Same as `emd` function
+Same as `emd_exact` function
 
 # Returns
-- `Matrix{Float64}`: Symmetric matrix of pairwise EMD values
+- `Matrix{Float64}`: Symmetric matrix of pairwise EMDs
 """
-function emds(events::Vector{Matrix{Float64}}; kwargs...)
+function emds_exact(events::Vector{Matrix{Float64}}; kwargs...)
     n = length(events)
     emd_matrix = zeros(Float64, n, n)
-    
+
     for i in 1:n
         for j in i+1:n
-            emd_matrix[i, j] = emd(events[i], events[j]; kwargs...)
+            emd_matrix[i, j] = emd_exact(events[i], events[j]; kwargs...)
             emd_matrix[j, i] = emd_matrix[i, j]
         end
     end
-    
+
     return emd_matrix
 end
 
 """
     process_event(event::Matrix{Float64}, params::EMDParameters)
 
-Process event for EMD calculation.
+Process event for EMD calculation using views to minimize allocations.
 
 # Returns
 - `weights::Vector{Float64}`: Particle weights (pT values)
 - `coords::Matrix{Float64}`: Particle coordinates
 """
 function process_event(event::Matrix{Float64}, params::EMDParameters)
-    event = copy(event)
-
+    n_particles = size(event, 1)
+    n_cols = size(event, 2)
+    
     # Check if conversion to Cartesian coordinates is needed
-    converted_to_cartesian = false
-    if params.measure != "euclidean" && params.coords == "hadronic"
-        event = hadronic_to_cartesian(event)
-        converted_to_cartesian = true
+    needs_cartesian = params.measure != "euclidean" && params.coords == "hadronic"
+    
+    if needs_cartesian
+        # Must convert hadronic to cartesian - requires allocation
+        cartesian = hadronic_to_cartesian(event)
+        return process_cartesian_event(cartesian, params, n_particles)
     end
-
-    # Extract weights and coordinates based on the event format
-    if size(event, 2) == 3 && !converted_to_cartesian
-        # [pT, y, phi]
-        weights = event[:, 1]
-        coords = event[:, 2:3]
-    elseif size(event, 2) == 4
-        # [t, x, y, z]
-        if params.coords == "cartesian" || converted_to_cartesian
-            weights = event[:, 1]
-            coords = event[:, 2:4]
-        else # [pT, y, phi, weight]
-            weights = event[:, 1] .* event[:, 4]  # Effective pT = pT * weight
+    
+    # Determine coordinate dimensions
+    if n_cols == 3
+        # [pT, y, phi] format
+        if params.norm
+            # Need to normalize - must allocate
+            weights = event[:, 1] / sum(event[:, 1])
             coords = event[:, 2:3]
+        else
+            # Add dummy particle - must allocate for extended arrays
+            weights = vcat(event[:, 1], 0.0)
+            coords = vcat(event[:, 2:3], zeros(1, 2))
+        end
+    elseif n_cols == 4
+        if params.coords == "cartesian"
+            # [E, px, py, pz] format
+            if params.norm
+                weights = event[:, 1] / sum(event[:, 1])
+                coords = event[:, 2:4]
+            else
+                weights = vcat(event[:, 1], 0.0)
+                coords = vcat(event[:, 2:4], zeros(1, 3))
+            end
+        else
+            # [pT, y, phi, weight] format
+            effective_weights = event[:, 1] .* event[:, 4]
+            if params.norm && sum(effective_weights) > 0
+                weights = effective_weights / sum(effective_weights)
+                coords = event[:, 2:3]
+            else
+                weights = vcat(effective_weights, 0.0)
+                coords = vcat(event[:, 2:3], zeros(1, 2))
+            end
         end
     else
         error("Event must have 3 or 4 columns")
     end
-
+    
+    # Handle coordinate transformations
     if params.measure != "euclidean"
         coords = normalize_coordinates(coords)
-    # Handle periodic boundary conditions for phi
     elseif params.periodic_phi && size(coords, 2) >= 2
-        coords[:, end] = mod.(coords[:, end], 2π)
+        # In-place modification for periodic phi
+        coords = copy(coords)  # Need to copy to avoid modifying original
+        @inbounds @simd for i in 1:size(coords, 1)
+            coords[i, end] = mod(coords[i, end], 2π)
+        end
     end
+    
+    return weights, coords
+end
 
-    # Normalize weights to sum to 1 if required
-    if params.norm && sum(weights) > 0
-        weights = weights / sum(weights)
+"""
+    process_cartesian_event(cartesian::Matrix{Float64}, params::EMDParameters, n_particles::Int)
+
+Process cartesian event data.
+"""
+function process_cartesian_event(cartesian::Matrix{Float64}, params::EMDParameters, n_particles::Int)
+    # Extract energy as weights and spatial coordinates
+    if params.norm
+        weights = cartesian[:, 1] / sum(cartesian[:, 1])
+        coords = cartesian[:, 2:4]
+    else
+        weights = vcat(cartesian[:, 1], 0.0)
+        coords = vcat(cartesian[:, 2:4], zeros(1, 3))
     end
-
-    # Add a dummy zero-weight particle if weights are not normalized
-    if !params.norm
-        weights = vcat(weights, 0.0)
-        coords = vcat(coords, zeros(1, size(coords, 2)))
+    
+    if params.measure != "euclidean"
+        coords = normalize_coordinates(coords)
     end
-
+    
     return weights, coords
 end
 
@@ -214,51 +252,92 @@ end
 function hadronic_to_cartesian(event::Matrix{Float64})
     """Convert hadronic coordinates (pT, y, phi) to cartesian (E, px, py, pz)"""
     n_particles = size(event, 1)
-    cartesian = zeros(n_particles, 4)
+    cartesian = Matrix{Float64}(undef, n_particles, 4)
     
-    pT = event[:, 1]
-    y = event[:, 2]
-    phi = event[:, 3]
+    pT = @view event[:, 1]
+    y = @view event[:, 2]
+    phi = @view event[:, 3]
     
-    cartesian[:, 1] = pT .* cosh.(y)  # E
-    cartesian[:, 2] = pT .* cos.(phi)  # px
-    cartesian[:, 3] = pT .* sin.(phi)  # py
-    cartesian[:, 4] = pT .* sinh.(y)   # pz
+    # Pre-compute expensive trig functions
+    cosh_y = cosh.(y)
+    sinh_y = sinh.(y)
+    cos_phi = cos.(phi)
+    sin_phi = sin.(phi)
+    
+    @inbounds @simd for i in 1:n_particles
+        cartesian[i, 1] = pT[i] * cosh_y[i]   # E
+        cartesian[i, 2] = pT[i] * cos_phi[i]  # px
+        cartesian[i, 3] = pT[i] * sin_phi[i]  # py
+        cartesian[i, 4] = pT[i] * sinh_y[i]   # pz
+    end
     
     return cartesian
 end
 
 function normalize_coordinates(coords::Matrix{Float64})
     """Normalize coordinate vectors for spherical measure"""
-    norms = sqrt.(sum(coords.^2, dims=2))
-    norms[norms .== 0] .= 1.0
-    return coords ./ norms
+    n_particles = size(coords, 1)
+    n_dims = size(coords, 2)
+    normalized = similar(coords)
+    
+    @inbounds for i in 1:n_particles
+        norm_sq = 0.0
+        @simd for j in 1:n_dims
+            norm_sq += coords[i, j]^2
+        end
+        
+        norm = sqrt(norm_sq)
+        if norm > 0
+            inv_norm = 1.0 / norm
+            @simd for j in 1:n_dims
+                normalized[i, j] = coords[i, j] * inv_norm
+            end
+        else
+            @simd for j in 1:n_dims
+                normalized[i, j] = coords[i, j]
+            end
+        end
+    end
+    
+    return normalized
 end
 
-function handle_normalization(pTs1::Vector{Float64}, pTs2::Vector{Float64}, 
-                            dist_matrix::Matrix{Float64}, params::EMDParameters)
-    """Handle weight normalization and dummy particles"""
+function handle_normalization(pTs1::AbstractVector{Float64}, pTs2::AbstractVector{Float64}, 
+                            dist_matrix::AbstractMatrix{Float64}, params::EMDParameters)
+    """Handle weight normalization and dummy particles - optimized in-place version"""
     
-    pT1_sum = sum(pTs1[1:end-1])
-    pT2_sum = sum(pTs2[1:end-1])
+    n1 = params.norm ? length(pTs1) : length(pTs1) - 1
+    n2 = params.norm ? length(pTs2) : length(pTs2) - 1
+    
+    pT1_sum = sum(@view pTs1[1:n1])
+    pT2_sum = sum(@view pTs2[1:n2])
     scale_factor = 1.0
     
     if !params.norm
         pT_diff = pT2_sum - pT1_sum
         if pT_diff > 0
             pTs1[end] = pT_diff
-            dist_matrix[end, :] .= 1.0
+            @inbounds @simd for j in 1:size(dist_matrix, 2)
+                dist_matrix[end, j] = 1.0
+            end
         elseif pT_diff < 0
             pTs2[end] = -pT_diff
-            dist_matrix[:, end] .= 1.0
+            @inbounds @simd for i in 1:size(dist_matrix, 1)
+                dist_matrix[i, end] = 1.0
+            end
         end
         
         rescale = max(pT1_sum, pT2_sum)
         if rescale > 0
-            pTs1 = pTs1 / rescale
-            pTs2 = pTs2 / rescale
+            # In-place normalization
+            inv_rescale = 1.0 / rescale
+            @inbounds @simd for i in eachindex(pTs1)
+                pTs1[i] *= inv_rescale
+            end
+            @inbounds @simd for i in eachindex(pTs2)
+                pTs2[i] *= inv_rescale
+            end
             scale_factor = rescale
-            return pTs1, pTs2, dist_matrix, scale_factor
         end
     end
     
