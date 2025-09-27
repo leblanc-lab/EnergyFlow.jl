@@ -93,6 +93,7 @@ wasserstein_wrapper_EXTERNAL_OBJECTS =
 libwasserstein_wrapper.dylib: CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o
 libwasserstein_wrapper.dylib: CMakeFiles/wasserstein_wrapper.dir/build.make
 libwasserstein_wrapper.dylib: /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/lib/libcxxwrap_julia_stl.dylib
+libwasserstein_wrapper.dylib: /opt/homebrew/opt/libomp/lib/libomp.dylib
 libwasserstein_wrapper.dylib: /Users/harrywanghc/.julia/artifacts/e81d9602652820f0b32ec2597ea7c0a80b41f6a4/lib/libcxxwrap_julia.0.14.4.dylib
 libwasserstein_wrapper.dylib: /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/lib/libjulia.1.11.7.dylib
 libwasserstein_wrapper.dylib: CMakeFiles/wasserstein_wrapper.dir/link.txt

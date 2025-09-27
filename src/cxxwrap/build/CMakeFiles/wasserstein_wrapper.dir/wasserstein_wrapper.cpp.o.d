@@ -14,8 +14,6 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_symbol_aliasing.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_posix_availability.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/ptrcheck.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_assert.h \
-  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_bounds.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_static_assert.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/functional \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/__functional/binary_function.h \
@@ -221,6 +219,7 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/stdlib.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/stdlib.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_stdlib.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_bounds.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_types.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/wait.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/sys/_types/_pid_t.h \
@@ -992,6 +991,7 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/work-stealing-queue.h \
   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/stdalign.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_assert.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/_assert.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_locks.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/jloptions.h \
   /Users/harrywanghc/.julia/juliaup/julia-1.11.7+0.aarch64.apple.darwin14/include/julia/julia_version.h \
@@ -1011,6 +1011,7 @@ CMakeFiles/wasserstein_wrapper.dir/wasserstein_wrapper.cpp.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/unordered_set \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/list \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/usr/include/c++/v1/forward_list \
+  /opt/homebrew/opt/libomp/include/omp.h \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/Wasserstein.hh \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/internal/CenterWeightedCentroid.hh \
   /Users/harrywanghc/Developer/2025/EnergyFlow.jl/src/cxxwrap/../Wasserstein_c/src/wasserstein/internal/EMDUtils.hh \

@@ -22,12 +22,24 @@ fi
 
 echo "Julia CxxWrap prefix: $JULIA_PREFIX"
 
-# Configure with cmake
-echo "Configuring with cmake..."
+# Configure with cmake (with OpenMP support)
+echo "Configuring with cmake (with OpenMP support)..."
+# Check for OpenMP location
+if [ -f "/opt/homebrew/lib/libomp.dylib" ]; then
+    OPENMP_LIB="/opt/homebrew/lib/libomp.dylib"
+    OPENMP_FLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib -lomp -Xclang -fopenmp"
+elif [ -f "/usr/local/lib/libomp.dylib" ]; then
+    OPENMP_LIB="/usr/local/lib/libomp.dylib"
+    OPENMP_FLAGS="-I/usr/local/include -L/usr/local/lib -lomp -Xclang -fopenmp"
+else
+    echo "Warning: OpenMP not found, building without parallelization"
+    OPENMP_FLAGS=""
+fi
+
 cmake .. \
     -DCMAKE_PREFIX_PATH="$JULIA_PREFIX" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-std=c++14 -fPIC"
+    -DCMAKE_CXX_FLAGS="-std=c++14 -fPIC $OPENMP_FLAGS"
 
 if [ $? -ne 0 ]; then
     echo "CMake configuration failed"
