@@ -192,7 +192,7 @@ Same as `emd_network_simplex`, plus:
 - `n_jobs::Int=-1`: Number of parallel jobs (-1 for all threads)
 - `verbose::Int=0`: Verbosity level
 - `print_every::Int=100`: Print progress every N pairs
-- `throw_on_error::Bool=true`: Whether to throw on EMD computation errors
+- `throw_on_error::Bool=false`: Whether to throw on EMD computation errors (false by default for parallel safety)
 
 # Returns
 - `dist_matrix::Matrix{Float64}`: Symmetric EMD distance matrix
@@ -202,7 +202,7 @@ function emds_network_simplex(events0::Vector{<:AbstractMatrix},
              R::Real=1.0, beta::Real=1.0, norm::Bool=false,
              gdim::Int=2, mask::Bool=false,
              n_jobs::Int=-1, print_every::Int=100, verbose::Int=0,
-             throw_on_error::Bool=true, n_iter_max::Int=100000,
+             throw_on_error::Bool=false, n_iter_max::Int=100000,
              epsilon_large_factor::Real=10000.0,
              epsilon_small_factor::Real=1.0)
 
