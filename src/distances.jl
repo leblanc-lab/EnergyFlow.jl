@@ -1,7 +1,14 @@
-# Distance computation functions with SIMD optimization
+# Distances.jl - Distance computation functions with SIMD optimization
+
+module Distances
 
 using LoopVectorization
 using StaticArrays
+using ..Utils: EMDParameters
+
+export euclidean_distance_2d, euclidean_distance_3d, periodic_phi_distance
+export compute_distance_matrix, pairwise_distances
+export compute_distance_matrix_2d_specialized, compute_distance_matrix_3d_specialized
 
 """
     euclidean_distance_2d(x1::Float64, y1::Float64, x2::Float64, y2::Float64)
@@ -162,3 +169,5 @@ Compute pairwise distances within a single set of coordinates.
 function pairwise_distances(coords::Matrix{Float64}, params::EMDParameters)
     return compute_distance_matrix(coords, coords, params)
 end
+
+end # module Distances

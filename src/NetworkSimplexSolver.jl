@@ -381,4 +381,122 @@ end
 
 # The emds_network_simplex function continues below...
 
+# ============================================================================
+# Plugin Interface Functions (for compatibility with EMD.jl backend system)
+# ============================================================================
+
+"""
+    solve_emd(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+
+Solve EMD using fast network simplex algorithm.
+This is the plugin interface for the EMD backend system.
+
+# Keywords
+- `R::Float64=1.0`: Maximum distance parameter
+- `beta::Float64=1.0`: Angular weighting exponent
+- `norm::Bool=false`: Whether to normalize weights
+- `return_flow::Bool=false`: Whether to return the flow matrix
+- `n_iter_max::Int=100000`: Maximum iterations
+- Other parameters passed through
+
+# Returns
+- `(emd_value::Float64, status::Symbol, flow_matrix::Union{Matrix{Float64},Nothing})`
+"""
+function solve_emd(event1::Matrix{Float64}, event2::Matrix{Float64};
+                   R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
+                   return_flow::Bool=false, n_iter_max::Int=100000,
+                   epsilon_large_factor::Float64=10000.0,
+                   epsilon_small_factor::Float64=1.0,
+                   kwargs...)
+
+    # Call the network simplex implementation
+    if return_flow
+        emd_val, status, flow = emd_network_simplex(
+            event1, event2;
+            R=R, beta=beta, norm=norm,
+            return_flow=true,
+            n_iter_max=n_iter_max,
+            epsilon_large_factor=epsilon_large_factor,
+            epsilon_small_factor=epsilon_small_factor,
+            kwargs...
+        )
+        # Convert status to symbol
+        status_sym = status == Success ? :success : :error
+        return (emd_val, status_sym, flow)
+    else
+        emd_val = emd_network_simplex(
+            event1, event2;
+            R=R, beta=beta, norm=norm,
+            return_flow=false,
+            n_iter_max=n_iter_max,
+            epsilon_large_factor=epsilon_large_factor,
+            epsilon_small_factor=epsilon_small_factor,
+            kwargs...
+        )
+        return (emd_val, :success, nothing)
+    end
+end
+
+"""
+    solve_emds(events::Vector{Matrix{Float64}}; kwargs...)
+
+Compute pairwise EMD matrix using network simplex.
+This is the plugin interface for the EMD backend system.
+
+# Returns
+- `Matrix{Float64}`: Symmetric EMD distance matrix
+"""
+function solve_emds(events::Vector{Matrix{Float64}};
+                    R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
+                    n_jobs::Int=-1, verbose::Int=0,
+                    n_iter_max::Int=100000,
+                    epsilon_large_factor::Float64=10000.0,
+                    epsilon_small_factor::Float64=1.0,
+                    kwargs...)
+
+    return emds_network_simplex(
+        events;
+        R=R, beta=beta, norm=norm,
+        n_jobs=n_jobs, verbose=verbose,
+        n_iter_max=n_iter_max,
+        epsilon_large_factor=epsilon_large_factor,
+        epsilon_small_factor=epsilon_small_factor,
+        kwargs...
+    )
+end
+
+"""
+    solve_emds(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}}; kwargs...)
+
+Compute pairwise EMD between two sets of events.
+This is the plugin interface for the EMD backend system.
+
+# Returns
+- `Matrix{Float64}`: EMD distance matrix (events1 × events2)
+"""
+function solve_emds(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}};
+                    R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
+                    n_jobs::Int=-1, verbose::Int=0,
+                    n_iter_max::Int=100000,
+                    epsilon_large_factor::Float64=10000.0,
+                    epsilon_small_factor::Float64=1.0,
+                    kwargs...)
+
+    return emds_network_simplex(
+        events1, events2;
+        R=R, beta=beta, norm=norm,
+        n_jobs=n_jobs, verbose=verbose,
+        n_iter_max=n_iter_max,
+        epsilon_large_factor=epsilon_large_factor,
+        epsilon_small_factor=epsilon_small_factor,
+        kwargs...
+    )
+end
+
+# Always available as it's pure Julia
+is_available() = true
+
+# Export plugin interface functions
+export solve_emd, solve_emds, is_available
+
 end # module

@@ -1,349 +1,292 @@
-# EMD (Earth Mover's Distance) implementation
+# EMD.jl - Main EMD orchestrator with backend system
+
+module EMD
+
+using ..Utils
+
+# Include solver modules
+include("NetworkSimplexSolver.jl")
+include("ExactSolver.jl")
+include("CxxSolver.jl")
+
+using .Wasserstein  # NetworkSimplexSolver exports module Wasserstein
+using .ExactSolver
+using .CxxSolver
+
+# Backend configuration
+"""
+Available backends for EMD computation:
+- `:network_simplex` (default): Fast network simplex solver
+- `:exact` or `:highs`: Exact solver using HiGHS
+- `:cxx`: C++ Wasserstein library (if available)
+"""
+const AVAILABLE_BACKENDS = [:network_simplex, :exact, :highs, :cxx]
+
+# Mutable backend setting (can be changed at runtime)
+const EMD_BACKEND = Ref(:network_simplex)
 
 """
-    EMDParameters
+    set_backend(backend::Symbol)
 
-Parameters for EMD computation.
-
-# Fields
-- `R::Float64`: R parameter controlling relative importance of terms (default: 1.0)
-- `beta::Float64`: Angular weighting exponent for distance matrix (default: 1.0)
-- `norm::Bool`: Whether to normalize particle weights to sum to 1 (default: false)
-- `measure::String`: Distance metric ("euclidean" or "spherical") (default: "euclidean")
-- `coords::String`: Coordinate system ("hadronic" or "cartesian") (default: "hadronic")
-- `periodic_phi::Bool`: Handle phi coordinate periodicity (default: false)
-- `n_iter_max::Int`: Maximum iterations for solver (default: 100000)
-"""
-Base.@kwdef struct EMDParameters
-    R::Float64 = 1.0
-    beta::Float64 = 1.0
-    norm::Bool = false
-    measure::String = "euclidean"
-    coords::String = "hadronic"
-    periodic_phi::Bool = false
-    n_iter_max::Int = 100000
-end
-
-
-"""
-    emd_exact(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
-
-Compute the Earth Mover's Distance between two events using the exact HiGHS solver.
+Set the backend for EMD computation.
 
 # Arguments
-- `event1`: First event as (M, 3) or (M, 4) matrix where M is multiplicity
-- `event2`: Second event as (N, 3) or (N, 4) matrix where N is multiplicity
+- `backend`: One of `:network_simplex` (default), `:exact`/`:highs`, or `:cxx`
 
-For 3-column format: [pT, y, phi]
-For 4-column format: [pT, y, phi, weight]
+# Examples
+```julia
+EMD.set_backend(:exact)  # Use exact HiGHS solver
+EMD.set_backend(:network_simplex)  # Use fast network simplex (default)
+EMD.set_backend(:cxx)  # Use C++ implementation (if available)
+```
+"""
+function set_backend(backend::Symbol)
+    # Handle aliases
+    if backend == :highs
+        backend = :exact
+    end
+
+    if backend ∉ AVAILABLE_BACKENDS
+        error("Invalid backend: $backend. Available backends: $AVAILABLE_BACKENDS")
+    end
+
+    if backend == :cxx && !CxxSolver.is_available()
+        error("C++ backend not available. Build it with: cd src/cxxwrap && ./build_wrapper.sh")
+    end
+
+    EMD_BACKEND[] = backend
+    @info "EMD backend set to: $backend"
+end
+
+"""
+    get_backend()
+
+Get the current EMD computation backend.
+"""
+get_backend() = EMD_BACKEND[]
+
+"""
+    emd(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+
+Compute the Earth Mover's Distance (EMD) between two events using the selected backend.
+
+# Arguments
+- `event1`: First event as (N, 3+) matrix [weight, y, phi, ...]
+- `event2`: Second event as (M, 3+) matrix [weight, y, phi, ...]
 
 # Keywords
-- `R::Float64=1.0`: R parameter controlling relative importance of terms
-- `beta::Float64=1.0`: Angular weighting exponent for distance matrix
-- `norm::Bool=false`: Whether to normalize particle weights to sum to 1
-- `measure::String="euclidean"`: Distance metric ("euclidean" or "spherical")
-- `coords::String="hadronic"`: Coordinate system ("hadronic" or "cartesian")
-- `periodic_phi::Bool=false`: Handle phi coordinate periodicity
-- `n_iter_max::Int=100000`: Maximum iterations for solver
-- `return_flow::Bool=false`: Whether to return optimal transport flow matrix
+- `backend::Symbol=get_backend()`: Override backend for this call
+- `R::Float64=1.0`: Maximum distance parameter
+- `beta::Float64=1.0`: Angular weighting exponent
+- `norm::Bool=false`: Whether to normalize weights
+- `return_flow::Bool=false`: Whether to return flow matrix
+- Backend-specific parameters...
 
 # Returns
-- `Float64`: EMD value
-- `Matrix{Float64}` (optional): Flow matrix if return_flow=true
+- EMD value (Float64) by default
+- `(emd_value, flow_matrix)` if `return_flow=true`
+
+# Examples
+```julia
+event1 = [1.0 0.0 0.0; 1.0 0.5 0.5]  # 2 particles: [weight y phi]
+event2 = [1.0 0.1 0.1; 1.0 0.6 0.6]
+emd_value = emd(event1, event2)
+
+# Use specific backend
+emd_value = emd(event1, event2, backend=:exact)
+```
 """
-function emd_exact(event1::Matrix{Float64}, event2::Matrix{Float64};
-                   R::Float64=1.0, beta::Float64=1.0, norm::Bool=false,
-                   measure::String="euclidean", coords::String="hadronic",
-                   periodic_phi::Bool=false, n_iter_max::Int=100000,
-                   return_flow::Bool=false, kwargs...)
+function emd(event1::Matrix{Float64}, event2::Matrix{Float64};
+             backend::Symbol=EMD_BACKEND[], return_flow::Bool=false,
+             kwargs...)
 
-    # Validate that R and beta are positive
-    if R <= 0
-        throw(ArgumentError("R must be a positive value"))
-    end
-    if beta <= 0
-        throw(ArgumentError("beta must be a positive value"))
+    # Handle backend aliases
+    if backend == :highs
+        backend = :exact
     end
 
-    # Empty events
-    if size(event1, 1) == 0 && size(event2, 1) == 0
-        return return_flow ? (0.0, zeros(0, 0)) : 0.0
-    elseif size(event1, 1) == 0 || size(event2, 1) == 0
-        throw(ArgumentError("Cannot compute EMD between empty and non-empty events"))
-    end
-    
-    params = EMDParameters(R=R, beta=beta, norm=norm, measure=measure, 
-                          coords=coords, periodic_phi=periodic_phi, n_iter_max=n_iter_max)
-    
-    pTs1, coords1 = process_event(event1, params)
-    pTs2, coords2 = process_event(event2, params)
-    
-    dist_matrix = compute_distance_matrix(coords1, coords2, params)
-    
-    if params.beta != 1.0
-        dist_matrix = dist_matrix .^ params.beta
-    end
-    
-    pTs1, pTs2, dist_matrix, scale_factor = handle_normalization(pTs1, pTs2, dist_matrix, params)
-
-    # Always use HiGHS exact solver
-    flow, cost = solve_emd_exact(pTs1, pTs2, dist_matrix)
-    cost = cost * scale_factor
-    
-    if return_flow
-        return cost, flow
+    # Select solver based on backend
+    if backend == :network_simplex
+        emd_val, status, flow = Wasserstein.solve_emd(
+            event1, event2; return_flow=return_flow, kwargs...
+        )
+    elseif backend == :exact
+        emd_val, status, flow = ExactSolver.solve_emd(
+            event1, event2; return_flow=return_flow, kwargs...
+        )
+    elseif backend == :cxx
+        if !CxxSolver.is_available()
+            error("C++ backend not available. Build it with: cd src/cxxwrap && ./build_wrapper.sh")
+        end
+        emd_val, status, flow = CxxSolver.solve_emd(
+            event1, event2; kwargs...
+        )
     else
-        return cost
+        error("Unknown backend: $backend")
+    end
+
+    # Check status
+    if status != :success
+        @warn "EMD computation returned status: $status"
+    end
+
+    # Return based on options
+    if return_flow && flow !== nothing
+        return emd_val, flow
+    else
+        return emd_val
     end
 end
 
 """
-    emds_exact(events::Vector{Matrix{Float64}}; kwargs...)
+    emds(events::Vector{Matrix{Float64}}; kwargs...)
+    emds(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}}; kwargs...)
 
-Compute pairwise EMD matrix for a collection of events using the exact HiGHS solver.
+Compute pairwise EMD matrix using the selected backend.
 
 # Arguments
-- `events`: Vector of event matrices, each as (M, 3) or (M, 4) matrix
+- `events`: Vector of events for symmetric pairwise computation
+- `events1`, `events2`: Two sets of events for asymmetric computation
 
 # Keywords
-Same as `emd_exact` function
+- `backend::Symbol=get_backend()`: Override backend for this call
+- Other parameters passed to the backend
 
-# Returns
-- `Matrix{Float64}`: Symmetric matrix of pairwise EMDs
+# Examples
+```julia
+events = [event1, event2, event3]
+emd_matrix = emds(events)
+
+# Asymmetric computation
+emd_matrix = emds(events_set1, events_set2)
+```
 """
-function emds_exact(events::Vector{Matrix{Float64}}; kwargs...)
-    n = length(events)
-    emd_matrix = zeros(Float64, n, n)
+function emds(events::Vector{Matrix{Float64}};
+              backend::Symbol=EMD_BACKEND[], kwargs...)
 
-    for i in 1:n
-        for j in i+1:n
-            emd_matrix[i, j] = emd_exact(events[i], events[j]; kwargs...)
-            emd_matrix[j, i] = emd_matrix[i, j]
-        end
+    # Handle backend aliases
+    if backend == :highs
+        backend = :exact
     end
 
-    return emd_matrix
-end
-
-"""
-    process_event(event::Matrix{Float64}, params::EMDParameters)
-
-Process event for EMD calculation using views to minimize allocations.
-
-# Returns
-- `weights::Vector{Float64}`: Particle weights (pT values)
-- `coords::Matrix{Float64}`: Particle coordinates
-"""
-function process_event(event::Matrix{Float64}, params::EMDParameters)
-    n_particles = size(event, 1)
-    n_cols = size(event, 2)
-    
-    # Check if conversion to Cartesian coordinates is needed
-    needs_cartesian = params.measure != "euclidean" && params.coords == "hadronic"
-    
-    if needs_cartesian
-        # Must convert hadronic to cartesian - requires allocation
-        cartesian = hadronic_to_cartesian(event)
-        return process_cartesian_event(cartesian, params, n_particles)
-    end
-    
-    # Determine coordinate dimensions
-    if n_cols == 3
-        # [pT, y, phi] format
-        if params.norm
-            # Need to normalize - must allocate
-            weights = event[:, 1] / sum(event[:, 1])
-            coords = event[:, 2:3]
-        else
-            # Add dummy particle - must allocate for extended arrays
-            weights = vcat(event[:, 1], 0.0)
-            coords = vcat(event[:, 2:3], zeros(1, 2))
+    # Select solver based on backend
+    if backend == :network_simplex
+        return Wasserstein.solve_emds(events; kwargs...)
+    elseif backend == :exact
+        return ExactSolver.solve_emds(events; kwargs...)
+    elseif backend == :cxx
+        if !CxxSolver.is_available()
+            error("C++ backend not available. Build it with: cd src/cxxwrap && ./build_wrapper.sh")
         end
-    elseif n_cols == 4
-        if params.coords == "cartesian"
-            # [E, px, py, pz] format
-            if params.norm
-                weights = event[:, 1] / sum(event[:, 1])
-                coords = event[:, 2:4]
-            else
-                weights = vcat(event[:, 1], 0.0)
-                coords = vcat(event[:, 2:4], zeros(1, 3))
-            end
-        else
-            # [pT, y, phi, weight] format
-            effective_weights = event[:, 1] .* event[:, 4]
-            if params.norm && sum(effective_weights) > 0
-                weights = effective_weights / sum(effective_weights)
-                coords = event[:, 2:3]
-            else
-                weights = vcat(effective_weights, 0.0)
-                coords = vcat(event[:, 2:3], zeros(1, 2))
-            end
-        end
+        return CxxSolver.solve_emds(events; kwargs...)
     else
-        error("Event must have 3 or 4 columns")
+        error("Unknown backend: $backend")
     end
-    
-    # Handle coordinate transformations
-    if params.measure != "euclidean"
-        coords = normalize_coordinates(coords)
-    elseif params.periodic_phi && size(coords, 2) >= 2
-        # In-place modification for periodic phi
-        coords = copy(coords)  # Need to copy to avoid modifying original
-        @inbounds @simd for i in 1:size(coords, 1)
-            coords[i, end] = mod(coords[i, end], 2π)
-        end
-    end
-    
-    return weights, coords
 end
 
-"""
-    process_cartesian_event(cartesian::Matrix{Float64}, params::EMDParameters, n_particles::Int)
+function emds(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}};
+              backend::Symbol=EMD_BACKEND[], kwargs...)
 
-Process cartesian event data.
-"""
-function process_cartesian_event(cartesian::Matrix{Float64}, params::EMDParameters, n_particles::Int)
-    # Extract energy as weights and spatial coordinates
-    if params.norm
-        weights = cartesian[:, 1] / sum(cartesian[:, 1])
-        coords = cartesian[:, 2:4]
+    # Handle backend aliases
+    if backend == :highs
+        backend = :exact
+    end
+
+    # Select solver based on backend
+    if backend == :network_simplex
+        return Wasserstein.solve_emds(events1, events2; kwargs...)
+    elseif backend == :exact
+        return ExactSolver.solve_emds(events1, events2; kwargs...)
+    elseif backend == :cxx
+        if !CxxSolver.is_available()
+            error("C++ backend not available. Build it with: cd src/cxxwrap && ./build_wrapper.sh")
+        end
+        return CxxSolver.solve_emds(events1, events2; kwargs...)
     else
-        weights = vcat(cartesian[:, 1], 0.0)
-        coords = vcat(cartesian[:, 2:4], zeros(1, 3))
+        error("Unknown backend: $backend")
     end
-    
-    if params.measure != "euclidean"
-        coords = normalize_coordinates(coords)
-    end
-    
-    return weights, coords
+end
+
+# Direct access to specific solvers (for advanced users)
+"""
+    emd_network_simplex(event1, event2; kwargs...)
+
+Directly use the network simplex solver.
+"""
+function emd_network_simplex(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+    emd_val, _, _ = Wasserstein.solve_emd(event1, event2; kwargs...)
+    return emd_val
 end
 
 """
-    prepare_event_for_emd(event; pT_col=1, y_col=2, phi_col=3, weight_col=nothing)
+    emds_network_simplex(events; kwargs...)
 
-Prepare event data in the format expected by EMD functions.
-
-# Arguments
-- `event`: Event data (can be various formats)
-- `pT_col`: Column index for pT (default: 1)
-- `y_col`: Column index for rapidity (default: 2)
-- `phi_col`: Column index for azimuthal angle (default: 3)
-- `weight_col`: Column index for weights (default: nothing)
-
-# Returns
-- `Matrix{Float64}`: Event in standard format [pT, y, phi] or [pT, y, phi, weight]
+Directly use the network simplex solver for pairwise computation.
 """
-function prepare_event_for_emd(event; pT_col=1, y_col=2, phi_col=3, weight_col=nothing)
-    if isa(event, Matrix)
-        if weight_col === nothing
-            return event[:, [pT_col, y_col, phi_col]]
-        else
-            return event[:, [pT_col, y_col, phi_col, weight_col]]
-        end
-    else
-        error("Unsupported event format")
-    end
+emds_network_simplex(events::Vector{Matrix{Float64}}; kwargs...) =
+    Wasserstein.solve_emds(events; kwargs...)
+
+emds_network_simplex(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}}; kwargs...) =
+    Wasserstein.solve_emds(events1, events2; kwargs...)
+
+"""
+    emd_exact(event1, event2; kwargs...)
+
+Directly use the exact solver.
+"""
+function emd_exact(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+    emd_val, _, _ = ExactSolver.solve_emd(event1, event2; kwargs...)
+    return emd_val
 end
 
-# Helper functions
+"""
+    emds_exact(events; kwargs...)
 
-function hadronic_to_cartesian(event::Matrix{Float64})
-    """Convert hadronic coordinates (pT, y, phi) to cartesian (E, px, py, pz)"""
-    n_particles = size(event, 1)
-    cartesian = Matrix{Float64}(undef, n_particles, 4)
-    
-    pT = @view event[:, 1]
-    y = @view event[:, 2]
-    phi = @view event[:, 3]
-    
-    # Pre-compute expensive trig functions
-    cosh_y = cosh.(y)
-    sinh_y = sinh.(y)
-    cos_phi = cos.(phi)
-    sin_phi = sin.(phi)
-    
-    @inbounds @simd for i in 1:n_particles
-        cartesian[i, 1] = pT[i] * cosh_y[i]   # E
-        cartesian[i, 2] = pT[i] * cos_phi[i]  # px
-        cartesian[i, 3] = pT[i] * sin_phi[i]  # py
-        cartesian[i, 4] = pT[i] * sinh_y[i]   # pz
+Directly use the exact solver for pairwise computation.
+"""
+emds_exact(events::Vector{Matrix{Float64}}; kwargs...) =
+    ExactSolver.solve_emds(events; kwargs...)
+
+emds_exact(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}}; kwargs...) =
+    ExactSolver.solve_emds(events1, events2; kwargs...)
+
+"""
+    emd_cxx(event1, event2; kwargs...)
+
+Directly use the C++ solver (if available).
+"""
+function emd_cxx(event1::Matrix{Float64}, event2::Matrix{Float64}; kwargs...)
+    if !CxxSolver.is_available()
+        error("C++ solver not available. Build with: cd src/cxxwrap && ./build_wrapper.sh")
     end
-    
-    return cartesian
+    emd_val, _, _ = CxxSolver.solve_emd(event1, event2; kwargs...)
+    return emd_val
 end
 
-function normalize_coordinates(coords::Matrix{Float64})
-    """Normalize coordinate vectors for spherical measure"""
-    n_particles = size(coords, 1)
-    n_dims = size(coords, 2)
-    normalized = similar(coords)
-    
-    @inbounds for i in 1:n_particles
-        norm_sq = 0.0
-        @simd for j in 1:n_dims
-            norm_sq += coords[i, j]^2
-        end
-        
-        norm = sqrt(norm_sq)
-        if norm > 0
-            inv_norm = 1.0 / norm
-            @simd for j in 1:n_dims
-                normalized[i, j] = coords[i, j] * inv_norm
-            end
-        else
-            @simd for j in 1:n_dims
-                normalized[i, j] = coords[i, j]
-            end
-        end
+"""
+    emds_cxx(events; kwargs...)
+
+Directly use the C++ solver for pairwise computation (if available).
+"""
+function emds_cxx(events::Vector{Matrix{Float64}}; kwargs...)
+    if !CxxSolver.is_available()
+        error("C++ solver not available. Build with: cd src/cxxwrap && ./build_wrapper.sh")
     end
-    
-    return normalized
+    return CxxSolver.solve_emds(events; kwargs...)
 end
 
-function handle_normalization(pTs1::AbstractVector{Float64}, pTs2::AbstractVector{Float64}, 
-                            dist_matrix::AbstractMatrix{Float64}, params::EMDParameters)
-    """Handle weight normalization and dummy particles - optimized in-place version"""
-    
-    n1 = params.norm ? length(pTs1) : length(pTs1) - 1
-    n2 = params.norm ? length(pTs2) : length(pTs2) - 1
-    
-    pT1_sum = sum(@view pTs1[1:n1])
-    pT2_sum = sum(@view pTs2[1:n2])
-    scale_factor = 1.0
-    
-    if !params.norm
-        pT_diff = pT2_sum - pT1_sum
-        if pT_diff > 0
-            pTs1[end] = pT_diff
-            @inbounds @simd for j in 1:size(dist_matrix, 2)
-                dist_matrix[end, j] = 1.0
-            end
-        elseif pT_diff < 0
-            pTs2[end] = -pT_diff
-            @inbounds @simd for i in 1:size(dist_matrix, 1)
-                dist_matrix[i, end] = 1.0
-            end
-        end
-        
-        rescale = max(pT1_sum, pT2_sum)
-        if rescale > 0
-            # In-place normalization
-            inv_rescale = 1.0 / rescale
-            @inbounds @simd for i in eachindex(pTs1)
-                pTs1[i] *= inv_rescale
-            end
-            @inbounds @simd for i in eachindex(pTs2)
-                pTs2[i] *= inv_rescale
-            end
-            scale_factor = rescale
-        end
+function emds_cxx(events1::Vector{Matrix{Float64}}, events2::Vector{Matrix{Float64}}; kwargs...)
+    if !CxxSolver.is_available()
+        error("C++ solver not available. Build with: cd src/cxxwrap && ./build_wrapper.sh")
     end
-    
-    return pTs1, pTs2, dist_matrix, scale_factor
+    return CxxSolver.solve_emds(events1, events2; kwargs...)
 end
 
-# Solver functions
+# Export main functions
+export emd, emds
+export set_backend, get_backend
+export emd_network_simplex, emds_network_simplex
+export emd_exact, emds_exact
+export emd_cxx, emds_cxx
 
-# solve_emd_exact is defined in src/exact_solver.jl
+end # module EMD
