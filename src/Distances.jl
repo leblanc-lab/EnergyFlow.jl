@@ -1,4 +1,6 @@
 #=
+    Distances.jl
+
     Distances: Cost matrix filling for EMD computation.
 
     Fills the cost matrix in the NetworkSimplex solver workspace.

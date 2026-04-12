@@ -1,11 +1,4 @@
 Manifest.toml
 .DS_Store
 /HarryTest
-/docs
-<<<<<<< Updated upstream
-*.py
-/examples/emd/output
-/examples/emd/data
-=======
 /scripts
->>>>>>> Stashed changes
