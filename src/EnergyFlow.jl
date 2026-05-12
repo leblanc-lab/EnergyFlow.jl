@@ -25,12 +25,8 @@ include("PairwiseEMD.jl")
 # Sinkhorn solver
 include("Sinkhorn.jl")
 
-# HepMC3 event parser (requires LorentzVectorHEP)
-try
-    include("HepMC3.jl")
-catch
-    @warn "HepMC3 submodule not loaded (LorentzVectorHEP not available)"
-end
+# HepMC3 event parser
+include("HepMC3.jl")
 
 # Backend dispatch (must be last)
 include("EMD.jl")
