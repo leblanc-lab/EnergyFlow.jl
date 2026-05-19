@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "EnergyFlow.jl"
+type: software
+authors:
+  - family-names: LeBlanc
+    given-names: Matt
+    orcid: "https://orcid.org/0000-0001-5977-6418"
+  - family-names: Li
+    given-names: Hanting
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: Wang
+    given-names: Haochen
+    orcid: "https://orcid.org/0009-0002-8496-2284"        
+license: MIT
+repository-code: "https://github.com/leblanc-lab/EnergyFlow.jl"
