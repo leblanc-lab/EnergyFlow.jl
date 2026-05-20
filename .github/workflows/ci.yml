@@ -28,8 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          julia -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
       - name: Run tests
         run: |
-          julia -e 'using Pkg; Pkg.test()'
+          julia --project=. -e 'using Pkg; Pkg.test()'
