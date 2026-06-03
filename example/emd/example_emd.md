@@ -7,7 +7,8 @@ Files in this folder:
 
 Run the script:
 ```bash
-julia example/emd/example_emd.jl
+cd EnergyFlow.jl/example/emd
+julia --project=. example_emd.jl
 ```
 Or open the notebook in Jupyter.
 

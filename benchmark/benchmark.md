@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Julia 1.12+ with BenchmarkTools: `julia -e "import Pkg; Pkg.add(\"BenchmarkTools\")"`
+- Julia 1.12+
 - Python EF benchmarking conda env: `conda activate wasserstein`
   - For conda environment, we need to have 'pythonOT', 'wasserstein', 'EnergyFlow' installed. For wasserstein library, we recommend using window/linux system.
 - Test data: `EnergyFlow.jl/data/event0_n*.csv` and `sk_example_PU.hepmc`
@@ -29,13 +29,13 @@ jupyter notebook single_emd_benchmark_python.ipynb
 ### Julia — single thread
 ```bash
 cd EnergyFlow.jl/benchmark
-julia emds_benchmark.jl
+julia --project=. emds_benchmark.jl
 ```
 
 ### Julia — 8 threads
 ```bash
 cd EnergyFlow.jl/benchmark
-julia -t 8 emds_benchmark.jl
+julia --project=. -t 8 emds_benchmark.jl
 ```
 
 ### Python — single thread

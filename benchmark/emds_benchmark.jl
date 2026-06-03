@@ -1,7 +1,11 @@
 # Pairwise EMD Benchmark — Julia EnergyFlow.jl
 # Usage: julia -t 8 emds_benchmark.jl
 
-push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
+using Pkg
+Pkg.activate(@__DIR__)
+Pkg.develop(path=joinpath(@__DIR__, ".."))
+Pkg.instantiate()
+
 using EnergyFlow
 using Printf
 
