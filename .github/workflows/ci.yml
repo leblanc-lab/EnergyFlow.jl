@@ -13,11 +13,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         julia-version: ["lts", "1", "pre"]
-        include:
-          - julia-version: "pre"
-            allow-failure: true
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix['allow-failure'] || false }}
+    continue-on-error: ${{ matrix.julia-version == 'pre' }}
     steps:
       - uses: actions/checkout@v4
 
