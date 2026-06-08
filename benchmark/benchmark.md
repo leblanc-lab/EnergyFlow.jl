@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Julia 1.12+
+- Julia 1.9+
 - Python EF benchmarking conda env: `conda activate wasserstein`
   - For conda environment, we need to have 'pythonOT', 'wasserstein', 'EnergyFlow' installed. For wasserstein library, we recommend using window/linux system.
 - Test data: `EnergyFlow.jl/data/event0_n*.csv` and `sk_example_PU.hepmc`
