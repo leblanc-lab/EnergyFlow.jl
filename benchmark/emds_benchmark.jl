@@ -1,5 +1,5 @@
 # Pairwise EMD Benchmark — Julia EnergyFlow.jl
-# Usage: julia -t 8 emds_benchmark.jl
+# Usage: cd benchmark && julia --project=. -t 8 emds_benchmark.jl
 
 using Pkg
 Pkg.activate(@__DIR__)
