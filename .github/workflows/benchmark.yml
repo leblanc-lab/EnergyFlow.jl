@@ -1,0 +1,31 @@
+name: EMDS Benchmark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: lts
+
+      - uses: julia-actions/cache@v2
+
+      - name: Install dependencies
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run EMDS benchmark
+        run: |
+          julia --project=. -t auto benchmark/emds_benchmark.jl
+
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: emds-benchmark-report
+          path: benchmark/result/emds_julia.md
