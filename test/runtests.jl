@@ -95,6 +95,54 @@ using EnergyFlow
         @test dists[1] > 0.0  # d(1,2) should differ
     end
 
+
+    @testset "gdim and custom metrics" begin
+        ev0 = [1.0 0.0 0.0 0.0; 1.0 1.0 2.0 3.0]
+        ev1 = [1.0 0.0 0.0 9.0; 1.0 1.0 2.0 8.0]
+
+        full = emd(ev0, ev1; R=1.0, beta=1.0, norm=true, gdim=3)
+        sliced = emd(ev0, ev1; R=1.0, beta=1.0, norm=true, gdim=2)
+        @test sliced ≈ 0.0 atol=1e-10
+        @test full > sliced
+
+        metric = CustomMetric((a, b) -> sqrt(sum((a .- b) .^ 2)))
+        custom = emd(ev0, ev1; R=1.0, beta=1.0, norm=true, gdim=2, metric=metric)
+        @test custom ≈ sliced atol=1e-10
+
+        costs = [0.0 2.0; 3.0 4.0]
+        precomputed = PrecomputedMetric(costs)
+        ws = EMDWorkspace(2, 2; beta=1.0, R=1.0, norm=true, metric=precomputed)
+        val = emd!(ws, ev0[:, 1:3], ev1[:, 1:3])
+        @test val ≈ 2.0 atol=1e-10
+    end
+
+    @testset "HepMC3 loader" begin
+        mktempdir() do dir
+            path = joinpath(dir, "mini.hepmc")
+            open(path, "w") do io
+                println(io, "HepMC::Version 3.0")
+                println(io, "E 1 0 0 0 0 0 0 0 0 0")
+                println(io, "P 1 0 11 1.0 0.0 0.0 1.0 0.0 1")
+                println(io, "P 2 0 13 0.0 1.0 1.0 1.5 0.0 2")
+                println(io, "E 2 0 0 0 0 0 0 0 0 0")
+                println(io, "P 3 0 22 0.0 2.0 0.0 2.0 0.0 1")
+                println(io, "HepMC::END_EVENT_LISTING")
+            end
+
+            events = load_hepmc3_events(path)
+            @test length(events) == 2
+            @test size(events[1]) == (1, 3)
+            @test size(events[2]) == (1, 3)
+            @test events[1][1, 1] ≈ 1.0 atol=1e-10
+            @test events[1][1, 2] ≈ 0.0 atol=1e-10
+            @test events[1][1, 3] ≈ 0.0 atol=1e-10
+
+            skipped = load_hepmc3_events(path; skipevents=1)
+            @test length(skipped) == 1
+            @test skipped[1][1, 1] ≈ 2.0 atol=1e-10
+
+        end
+    end
     @testset "emds — backend dispatch" begin
         events = [
             [0.5 0.0; 0.5 1.0],
