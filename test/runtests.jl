@@ -4,6 +4,10 @@ using Test
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 using EnergyFlow
 
+include("test_distances.jl")
+include("test_emd.jl")
+include("test_sinkhorn.jl")
+
 @testset "EnergyFlow" begin
 
     @testset "Backend management" begin
