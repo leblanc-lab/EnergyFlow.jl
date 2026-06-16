@@ -8,9 +8,9 @@ const TEST_DEBUG = lowercase(get(ENV, "TEST_DEBUG", "false")) in ("1", "true", "
 test_log(args...) = TEST_DEBUG ? println(args...) : nothing
 
 @testset "EnergyFlow" begin
-
     include("test_distances.jl")
     include("test_emd.jl")
+    include("test_emdsolver.jl")
     include("test_sinkhorn.jl")
 
     @testset "Backend management" begin
