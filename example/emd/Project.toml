@@ -1,0 +1,6 @@
+name = "EnergyFlowExampleEMD"
+uuid = "1b90e1ac-3e10-4f68-aef4-8b36b49f7d14"
+version = "0.1.0"
+
+[deps]
+EnergyFlow = "5c5b1f2e-4f8d-4a3e-9b7c-8e2d3f4a5b6c"
