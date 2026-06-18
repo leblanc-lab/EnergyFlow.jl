@@ -11,6 +11,7 @@ test_log(args...) = TEST_DEBUG ? println(args...) : nothing
     include("test_distances.jl")
     include("test_emd.jl")
     include("test_emdsolver.jl")
+    include("test_hepmc3.jl")
     include("test_sinkhorn.jl")
 
     @testset "Backend management" begin
