@@ -3,9 +3,7 @@ using Test
 # Add the package path
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 using EnergyFlow
-
-const TEST_DEBUG = lowercase(get(ENV, "TEST_DEBUG", "false")) in ("1", "true", "yes", "on")
-test_log(args...) = TEST_DEBUG ? println(args...) : nothing
+include("test_helpers.jl")
 
 @testset "EnergyFlow" begin
     include("test_distances.jl")

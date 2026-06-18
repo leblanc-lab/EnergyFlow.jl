@@ -4,6 +4,7 @@ using Random
 # Load EnergyFlow
 pushfirst!(LOAD_PATH, joinpath(@__DIR__, ".."))
 using EnergyFlow
+include("test_helpers.jl")
 
 Random.seed!(42)
 
