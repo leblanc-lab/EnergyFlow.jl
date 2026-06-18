@@ -12,6 +12,7 @@ test_log(args...) = TEST_DEBUG ? println(args...) : nothing
     include("test_emd.jl")
     include("test_emdsolver.jl")
     include("test_sinkhorn.jl")
+    include("test_utils.jl")
 
     @testset "Backend management" begin
         @test get_backend() == :ns64
