@@ -24,7 +24,8 @@ jobs:
         run: |
           julia --project=. -t auto benchmark/emds_benchmark.jl
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-	with:
-	  token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: emds-benchmark-report
+          path: benchmark/result/emds_julia.md
