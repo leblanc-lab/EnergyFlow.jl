@@ -1,5 +1,9 @@
 # EnergyFlow.jl — EMD Example
-push!(LOAD_PATH, joinpath(@__DIR__, "..", "..", "src"))
+using Pkg
+Pkg.activate(@__DIR__)
+Pkg.develop(path=joinpath(@__DIR__, "..", ".."))
+Pkg.instantiate()
+
 using EnergyFlow
 
 # Load events from HepMC3
