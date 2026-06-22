@@ -1,5 +1,6 @@
 using Test
 using EnergyFlow
+include("test_helpers.jl")
 
 test_log("="^70)
 test_log("EMDSOLVER TESTS")
