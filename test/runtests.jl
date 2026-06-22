@@ -3,12 +3,17 @@ using Test
 # Add the package path
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
 using EnergyFlow
+include("test_helpers.jl")
 
 # Include additional focused tests
 include("test_distances.jl")
 include("test_sinkhorn.jl")
 
 @testset "EnergyFlow" begin
+    include("test_distances.jl")
+    include("test_emd.jl")
+    include("test_emdsolver.jl")
+    include("test_sinkhorn.jl")
 
     @testset "Backend management" begin
         @test get_backend() == :ns64
