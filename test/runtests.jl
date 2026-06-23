@@ -12,6 +12,7 @@ include("test_helpers.jl")
     include("test_pairwise_emd.jl")
     include("test_hepmc3.jl")
     include("test_sinkhorn.jl")
+    include("test_utils.jl")
 
     @testset "Backend management" begin
         @test get_backend() == :ns64
