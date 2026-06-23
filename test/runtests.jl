@@ -9,6 +9,7 @@ include("test_helpers.jl")
     include("test_distances.jl")
     include("test_emd.jl")
     include("test_emdsolver.jl")
+    include("test_pairwise_emd.jl")
     include("test_hepmc3.jl")
     include("test_sinkhorn.jl")
 
