@@ -117,33 +117,41 @@ close(f)
 function read_events(f, fin; maxevents = -1, skipevents = 0)
     T = Float64
     particles = Particle{T}[]
-    ievent = 0
-    ipart = 0
     toskip = skipevents
+    emitted = 0
+    in_event = false
 
-    for (il, l) in enumerate(eachline(fin))
+    for l in eachline(fin)
         if occursin(r"HepMC::.*-END_EVENT_LISTING", l)
             break
         end
 
         tok = split(l)
+        isempty(tok) && continue
 
         if tok[1] == "E"
-            ievent += 1
-            (maxevents >= 0 && ievent > maxevents) && break
-            if ievent > 1 && toskip == 0
-                f(particles)
+            # Starting a new event means the previous one is complete
+            if in_event
+                if toskip > 0
+                    toskip -= 1
+                elseif maxevents < 0 || emitted < maxevents
+                    f(particles)
+                    emitted += 1
+                else
+                    break
+                end
             end
-            if toskip > 0
-                toskip -= 1
+            empty!(particles)
+            in_event = true
+
+        elseif tok[1] == "P" && in_event
+            # Skip particle parsing for skipped events or after maxevents
+            if toskip > 0 || (maxevents >= 0 && emitted >= maxevents)
+                continue
             end
-            resize!(particles, 0)
-            ipart = 0
-        elseif tok[1] == "P" && toskip == 0
-            ipart += 1
-            if ipart > length(particles)
-                push!(particles, Particle{T}())
-            end
+
+            length(tok) < 10 && continue
+
             barcode = parse(Int, tok[2])
             vertex = parse(Int, tok[3])
             pdgid = parse(Int, tok[4])
@@ -156,8 +164,16 @@ function read_events(f, fin; maxevents = -1, skipevents = 0)
                   Particle{T}(LorentzVector(e, px, py, pz), status, pdgid, barcode, vertex))
         end
     end
-    #processing the last event:
-    ievent > 0 && f(particles)
+
+    # Process the last event if present.
+    if in_event
+        if toskip > 0
+            return
+        end
+        if maxevents < 0 || emitted < maxevents
+            f(particles)
+        end
+    end
 end
 
 end
