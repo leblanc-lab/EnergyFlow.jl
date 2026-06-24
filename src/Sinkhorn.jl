@@ -465,7 +465,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
 
         ws_key = gensym(:sinkhorn_ws)
 
-        Threads.@threads :greedy for k in 1:npairs
+        _work_pair!(k) = begin
             ws = get!(task_local_storage(), ws_key) do
                 SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
                                      epsilon=epsilon, max_iter=max_iter_sinkhorn,
@@ -479,6 +479,16 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             results[k] = val
         end
+
+        @static if VERSION >= v"1.11"
+            Threads.@threads :greedy for k in 1:npairs
+                _work_pair!(k)
+            end
+        else
+            Threads.@threads for k in 1:npairs
+                _work_pair!(k)
+            end
+        end
         return results
     else
         tuples1 = _unpack(events1)
@@ -489,7 +499,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         ws_key = gensym(:sinkhorn_ws)
 
         npairs = na * nb
-        Threads.@threads :greedy for k in 1:npairs
+        _work_pair!(k) = begin
             ws = get!(task_local_storage(), ws_key) do
                 SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
                                      epsilon=epsilon, max_iter=max_iter_sinkhorn,
@@ -503,6 +513,16 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
 
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             D[i, j] = val
+        end
+
+        @static if VERSION >= v"1.11"
+            Threads.@threads :greedy for k in 1:npairs
+                _work_pair!(k)
+            end
+        else
+            Threads.@threads for k in 1:npairs
+                _work_pair!(k)
+            end
         end
         return D
     end
