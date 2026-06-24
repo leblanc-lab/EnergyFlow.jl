@@ -5,3 +5,5 @@ Manifest.toml
 __pycache__
 *.pyc
 /benchmark/result
+*.info
+*.cov
