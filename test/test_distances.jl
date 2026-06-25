@@ -62,6 +62,7 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
     @test fictitious_ws.ns.costs[3] == one(Float64)
 
     @testset "Chunk fillers - beta branches" begin
+        test_log("  chunk fillers: testing metric-specific branches")
         # Euclidean chunk, beta = 2 -> d2 / R2
         costs = zeros(Float64, 2)
         c0 = reshape([0.0], 1, 1)
@@ -70,6 +71,7 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
                                       1, 1,
                                       2, 1, 1,
                                       2.0, 2.0, 4.0)
+        test_log("    Euclidean beta=2: cost=$(costs[1]) (expected $(9.0 / 4.0))")
         @test costs[1] == 9.0 / 4.0
 
         # SquaredEuclidean chunk, beta = 2 -> (d2 / R)^2
@@ -78,6 +80,7 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
                                       1, 1,
                                       2, 1, 1,
                                       2.0, 2.0, 4.0)
+        test_log("    SquaredEuclidean beta=2: cost=$(costs[1]) (expected $((9.0 / 2.0)^2))")
         @test costs[1] == (9.0 / 2.0)^2
 
         # EtaPhi chunk, beta = 2 -> d2 / R2 with periodic phi handling
@@ -90,6 +93,7 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
                                       1, 1,
                                       2, 1, 2,
                                       2.0, 1.0, 1.0)
+        test_log("    EtaPhi beta=2 (periodic): cost=$(costs[1]) (expected 0.04)")
         @test isapprox(costs[1], 0.04; atol=1e-12)
 
         # Euclidean chunk, generic beta branch
@@ -98,23 +102,27 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
                                       1, 1,
                                       2, 1, 1,
                                       0.5, 1.0, 1.0)
+        test_log("    Euclidean beta=0.5 (generic): cost=$(costs[1]) (expected $(sqrt(3.0)))")
         @test isapprox(costs[1], sqrt(3.0); atol=1e-12)
     end
 
     @testset "Parallel fillers - metric dispatch" begin
-        # Ensure _fill_costs_parallel! executes chunked paths and fictitious fill.
+        test_log("  parallel fillers: testing metric dispatch with fictitious nodes")
+        # Ensure _fill_costs_parallel! executes chunked paths and fictitious fill
         coords0 = [0.0 1.0 2.0 3.0]
         coords1 = [1.0 2.0 3.0 4.0]
 
         ws_e = EMDWorkspace(5, 5; beta=2.0, R=2.0, norm=true)
         EnergyFlow._fill_costs_parallel!(ws_e, EuclideanMetric(), coords0, coords1,
                                          5, 5, true, true)
+        test_log("    Euclidean parallel: fict_src=$(ws_e.ns.costs[(5 - 1) * 5 + 1]) fict_tgt=$(ws_e.ns.costs[5])")
         @test ws_e.ns.costs[(5 - 1) * 5 + 1] == 1.0
         @test ws_e.ns.costs[5] == 1.0
 
         ws_sq = EMDWorkspace(5, 5; beta=2.0, R=2.0, norm=true)
         EnergyFlow._fill_costs_parallel!(ws_sq, SquaredEuclideanMetric(), coords0, coords1,
                                          5, 5, true, true)
+        test_log("    SquaredEuclidean parallel: fict_src=$(ws_sq.ns.costs[(5 - 1) * 5 + 1]) fict_tgt=$(ws_sq.ns.costs[5])")
         @test ws_sq.ns.costs[(5 - 1) * 5 + 1] == 1.0
         @test ws_sq.ns.costs[5] == 1.0
 
@@ -125,6 +133,7 @@ distance_test_workspace(beta, R; norm=true) = EMDWorkspace(1, 1; beta=beta, R=R,
         ws_eta = EMDWorkspace(5, 5; beta=2.0, R=1.0, norm=true)
         EnergyFlow._fill_costs_parallel!(ws_eta, EtaPhiMetric(), coords0_eta, coords1_eta,
                                          5, 5, true, true)
+        test_log("    EtaPhi parallel: fict_src=$(ws_eta.ns.costs[(5 - 1) * 5 + 1]) fict_tgt=$(ws_eta.ns.costs[5]) first_pair=$(ws_eta.ns.costs[1])")
         @test ws_eta.ns.costs[(5 - 1) * 5 + 1] == 1.0
         @test ws_eta.ns.costs[5] == 1.0
         @test isapprox(ws_eta.ns.costs[1], 0.04; atol=1e-12)
