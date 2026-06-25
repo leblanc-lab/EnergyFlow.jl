@@ -1,8 +1,8 @@
 # EnergyFlow.jl
 
 <!-- [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://energyflow.github.io/EnergyFlow.jl/stable)
-[![Build Status](https://github.com/leblanc-lab/EnergyFlow.jl/workflows/CI/badge.svg)](https://github.com/leblanc-lab/EnergyFlow.jl/actions)
-[![Coverage](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl) -->
+[![Build Status](https://github.com/leblanc-lab/EnergyFlow.jl/workflows/CI/badge.svg)](https://github.com/leblanc-lab/EnergyFlow.jl/actions) -->
+[![Coverage](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl)
 
 A Julia package for computing the **Energy Mover's Distance (EMD)** between collider events, with multiple solver backends and ground metrics, as a flexible alternative to the Python [EnergyFlow](https://energyflow.network/) package.
 
