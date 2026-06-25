@@ -1,25 +1,16 @@
-name: EMDS Benchmark
+name: EMD Benchmarks
 
 on:
-  workflow_dispatch:
+  pull_request_target:
+    branches: [main]
+
+permissions:
+  pull-requests: write
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Julia
-        uses: julia-actions/setup-julia@v2
+      - uses: MilesCranmer/AirspeedVelocity.jl@v0.6
         with:
-          version: lts
-
-      - uses: julia-actions/cache@v2
-
-      - name: Install dependencies
-        run: |
-          julia --project=. -e 'using Pkg; Pkg.instantiate()'
-
-      - name: Run EMDS benchmark
-        run: |
-          julia --project=. -t auto benchmark/emds_benchmark.jl
+          julia-version: "1"
