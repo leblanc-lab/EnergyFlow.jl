@@ -70,6 +70,88 @@ end
     end
 end
 
+@testset "Parallel-threshold dispatch (full parallel finder)" begin
+    ns = NetworkSimplexSolver{Float64}(2, 2)
+    ns.pivot_mode = :serial
+    ns.parallel_threshold = 1  # arc_num=4 >= 1 => pick _find_entering_arc_parallel!
+    ns.costs[1] = 1.0
+    ns.costs[2] = 3.0
+    ns.costs[3] = 2.0
+    ns.costs[4] = 4.0
+
+    status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
+    test_log("  parallel-threshold dispatch: status=$status n_iters=$(ns.n_iters)")
+    @test status == :optimal
+end
+
+@testset "Paper mode optimal cleanup" begin
+    ns = NetworkSimplexSolver{Float64}(2, 2)
+    ns.pivot_mode = :paper
+    ns.costs[1] = 1.0
+    ns.costs[2] = 3.0
+    ns.costs[3] = 2.0
+    ns.costs[4] = 4.0
+
+    status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
+    test_log("  paper optimal cleanup: nthreads=$(Threads.nthreads()) status=$status work_epoch=$(ns.work_epoch[]) done_count=$(ns.done_count[])")
+    @test status == :optimal
+    if Threads.nthreads() > 1
+        @test ns.work_epoch[] == -1
+    end
+end
+
+@testset "Paper mode unbounded in main loop" begin
+    # Adversarial signed supplies that trigger unboundedness after at least one
+    # pivot iteration (n_iters > 0), exercising the delta>=typemax(V) branch.
+    ns = NetworkSimplexSolver{Float64}(2, 1)
+    ns.pivot_mode = :paper
+    ns.costs[1] = -3.915877931934624
+    ns.costs[2] = -5.6906301598549245
+
+    source_weights = [-1.4673454953491227, 1.378981185299811]
+    target_weights = [-0.08836431004931167]
+
+    status = network_simplex!(ns, source_weights, target_weights; max_iter=200)
+    test_log("  paper unbounded main-loop: status=$status n_iters=$(ns.n_iters) work_epoch=$(ns.work_epoch[])")
+
+    @test status == :unbounded
+    @test ns.n_iters > 0
+    if Threads.nthreads() > 1
+        @test ns.work_epoch[] == -1
+    end
+end
+
+@testset "Paper entering-arc false full scan" begin
+    ns = NetworkSimplexSolver{Float64}(1, 1)
+    ns.costs[1] = 1.0
+    @test network_simplex!(ns, [1.0], [1.0]) == :optimal
+
+    ns.paper_block_size = 1
+    ns.next_arc = 1
+    ns.states[1] = EnergyFlow.STATE_TREE  # guarantees no entering arc
+
+    nworkers = Threads.nthreads() - 1
+    if nworkers > 0
+        ns.work_epoch[] = 0
+        ns.done_count[] = 0
+        for w in 1:nworkers
+            ns.worker_tasks[w] = Threads.@spawn EnergyFlow._paper_worker_loop!(ns, w + 1)
+        end
+    end
+
+    found = EnergyFlow._find_entering_arc_paper!(ns)
+    test_log("  paper entering false scan: found=$found next_arc=$(ns.next_arc) nthreads=$(Threads.nthreads())")
+    @test !found
+    @test ns.next_arc == 1
+
+    if nworkers > 0
+        Threads.atomic_xchg!(ns.work_epoch, -1)
+        for i in 1:nworkers
+            wait(ns.worker_tasks[i])
+        end
+    end
+end
+
 @testset "Internal entering-arc scans" begin
     ns = NetworkSimplexSolver{Float64}(1, 1)
     ns.costs[1] = 1.0
