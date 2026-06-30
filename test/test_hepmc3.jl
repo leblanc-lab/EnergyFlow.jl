@@ -20,6 +20,20 @@ P 4 0 2212  0.0  3.0  4.0  5.0  0.938  1
 HepMC::Asciiv3-END_EVENT_LISTING
 """
 
+@testset "HepMC3.Particle default constructor" begin
+    test_log("  Particle{Float64}() default constructor")
+    p = EnergyFlow.HepMC3.Particle{Float64}()
+
+    @test p.status == 0
+    @test p.pdgid == 0
+    @test p.barcode == 0
+    @test p.vertex == 0
+    @test p.momentum.t == 0.0
+    @test p.momentum.x == 0.0
+    @test p.momentum.y == 0.0
+    @test p.momentum.z == 0.0
+end
+
 @testset "HepMC3.read_events - basic" begin
     test_log("  read_events basic: reading 2-event synthetic stream")
     events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
@@ -88,6 +102,39 @@ end
 
     test_log("  sentinel stop: got $(length(events)) event(s)")
     @test length(events) == 2
+end
+
+@testset "HepMC3.read_events - maxevents early break in E chain" begin
+    test_log("  read_events maxevents=0 should break on second E line")
+    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
+    EnergyFlow.HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); maxevents=0) do particles
+        push!(events, copy(particles))
+    end
+
+    test_log("  maxevents=0: got $(length(events)) event(s)")
+    @test isempty(events)
+end
+
+@testset "HepMC3.read_events - last event skipped returns early" begin
+    # Single event means skipevents is still > 0 when loop ends; this exercises
+    # the final `if toskip > 0; return` path.
+    single_event_content = """
+HepMC::Version 3.03.00
+HepMC::Asciiv3-START_EVENT_LISTING
+E 0 1 1
+U GEV MM
+P 1 0 211 1.0 0.0 0.0 1.1 0.14 1
+HepMC::Asciiv3-END_EVENT_LISTING
+"""
+
+    test_log("  single event with skipevents=1 should emit no events")
+    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
+    EnergyFlow.HepMC3.read_events(IOBuffer(single_event_content); skipevents=1) do particles
+        push!(events, copy(particles))
+    end
+
+    test_log("  skipevents=1 on single-event stream: got $(length(events)) event(s)")
+    @test isempty(events)
 end
 
 @testset "load_hepmc3_events - sample file" begin
