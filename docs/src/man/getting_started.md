@@ -22,6 +22,7 @@ dists = emds(events[1:10]; R=1.0, beta=1.0, norm=true)
 For repeated computations, reusing a workspace avoids repeated allocations.
 
 ```julia
-ws = EMDWorkspace(beta=1.0, R=1.0, norm=true)
+n = maximum(size(e, 1) for e in events)   # largest event
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
 val = emd!(ws, events[1], events[2])
 ```
