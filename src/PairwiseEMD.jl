@@ -46,7 +46,7 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
 
     ws_key = gensym(:pairwise_ws)
 
-    Threads.@threads :greedy for k in 1:npairs
+    _work_pair!(k) = begin
         ws = get!(task_local_storage(), ws_key) do
             w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
             w.parallel_threshold = typemax(Int)
@@ -63,6 +63,16 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
         results[k] = val
+    end
+
+    @static if VERSION >= v"1.11"
+        Threads.@threads :greedy for k in 1:npairs
+            _work_pair!(k)
+        end
+    else
+        Threads.@threads for k in 1:npairs
+            _work_pair!(k)
+        end
     end
 
     if symmetric
@@ -102,7 +112,7 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
     ws_key = gensym(:pairwise_ws)
 
     npairs = na * nb
-    Threads.@threads :greedy for k in 1:npairs
+    _work_pair!(k) = begin
         ws = get!(task_local_storage(), ws_key) do
             w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
             w.parallel_threshold = typemax(Int)
@@ -120,6 +130,16 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
         D[i, j] = val
+    end
+
+    @static if VERSION >= v"1.11"
+        Threads.@threads :greedy for k in 1:npairs
+            _work_pair!(k)
+        end
+    else
+        Threads.@threads for k in 1:npairs
+            _work_pair!(k)
+        end
     end
 
     return D
@@ -143,7 +163,7 @@ function _pairwise_emd_self!(results::AbstractVector{V},
 
     ws_key = gensym(:pairwise_ws)
 
-    Threads.@threads :greedy for k in 1:npairs
+    _work_pair!(k) = begin
         ws = get!(task_local_storage(), ws_key) do
             w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
             w.parallel_threshold = typemax(Int)
@@ -160,6 +180,16 @@ function _pairwise_emd_self!(results::AbstractVector{V},
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
         results[k] = val
+    end
+
+    @static if VERSION >= v"1.11"
+        Threads.@threads :greedy for k in 1:npairs
+            _work_pair!(k)
+        end
+    else
+        Threads.@threads for k in 1:npairs
+            _work_pair!(k)
+        end
     end
 
     return results

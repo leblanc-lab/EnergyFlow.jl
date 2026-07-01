@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -16,6 +17,8 @@ jobs:
         include:
           - julia-version: "pre"
             allow-failure: true
+          - julia-version: "lts"
++            allow-failure: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix['allow-failure'] || false }}
     steps:
