@@ -58,6 +58,27 @@ end
 end
 
 # ─────────────────────────────────────────────────────────────────────
+# Test 2b: Unbalanced mode with equal totals (no fictitious particle branch)
+# ─────────────────────────────────────────────────────────────────────
+@testset "Sinkhorn norm=false balanced totals branch" begin
+    # Equal total weights with norm=false should take the branch where
+    # n0_eff=n0 and n1_eff=n1 (no fictitious source/target particle).
+    ev0 = [1.0 0.0 0.0; 2.0 1.0 0.0]
+    ev1 = [1.5 0.5 0.0; 1.5 0.5 1.0]
+
+    @test sum(ev0[:, 1]) == sum(ev1[:, 1])
+
+    ws = SinkhornWorkspace{Float64}(2, 2; beta=1.0, R=1.0, norm=false,
+                                     epsilon=0.01, annealing=false,
+                                     max_iter=5000, tol=1e-9)
+    val = emd_sinkhorn!(ws, ev0, ev1)
+
+    test_log("  norm=false with equal totals: no fictitious particle branch, emd_sinkhorn! = $val")
+    @test isfinite(val)
+    @test val >= 0.0
+end
+
+# ─────────────────────────────────────────────────────────────────────
 # Test 3: Comparison with ns64 for various parameters
 # ─────────────────────────────────────────────────────────────────────
 test_log("\n" * "="^70)
