@@ -33,6 +33,9 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run tests
+        env:
+          # Run multithreaded so paper-mode / parallel network-simplex paths run in tests
+          JULIA_NUM_THREADS: "2"
         run: |
           julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
