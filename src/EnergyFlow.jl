@@ -1,3 +1,40 @@
+"""
+    EnergyFlow
+
+A Julia package for computing the **Energy Mover's Distance (EMD)** between
+collider events, with multiple solver backends and ground metrics.
+
+The EMD ([Komiske, Metodiev, Thaler, 2019](https://arxiv.org/abs/1902.02346))
+is an optimal-transport distance between events viewed as energy distributions
+over a metric space:
+
+```math
+\\mathrm{EMD}_{\\beta,R}(\\mathcal{E}_0, \\mathcal{E}_1)
+    = \\min_{f_{ij} \\ge 0} \\sum_{ij} f_{ij} \\left(\\frac{d_{ij}}{R}\\right)^{\\beta}
+```
+
+subject to transport constraints, where ``d_{ij}`` is the ground distance
+between particles ``i`` and ``j``.
+
+# Main entry points
+- [`emd`](@ref) / [`emd!`](@ref): single-pair EMD (allocating / workspace-reusing)
+- [`emds`](@ref) / [`emds!`](@ref): pairwise EMDs over collections of events
+- [`set_backend`](@ref) / [`get_backend`](@ref): choose the default solver backend
+- [`load_hepmc3_events`](@ref): read events from a HepMC3 ASCII file
+
+# Event format
+Events are `M × (1 + d)` matrices with one row per particle: column 1 holds
+the particle weight (typically ``p_T`` or energy) and columns `2:(1+d)` hold
+the ground-space coordinates (typically rapidity ``y`` and azimuth ``\\phi``).
+
+# Backends
+`:ns64` (default), `:ot64`, `:ns32`, `:ot32` (exact network simplex variants)
+and `:sinkhorn` (approximate entropic OT). See [`set_backend`](@ref).
+
+# Ground metrics
+[`EuclideanMetric`](@ref) (default), [`SquaredEuclideanMetric`](@ref),
+[`EtaPhiMetric`](@ref), [`PrecomputedMetric`](@ref), [`CustomMetric`](@ref).
+"""
 module EnergyFlow
 
 # Disable precompilation: @threads closures precompiled with 1 thread (Julia 1.12)

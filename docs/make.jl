@@ -6,7 +6,8 @@ DocMeta.setdocmeta!(EnergyFlow, :DocTestSetup, :(using EnergyFlow); recursive=tr
 makedocs(
     modules=[EnergyFlow],
     sitename="EnergyFlow.jl",
-    checkdocs=:none,
+    checkdocs=:exports,
+    checkdocs_ignored_modules=[EnergyFlow.HepMC3],
     format=Documenter.HTML(
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://leblanc-lab.github.io/EnergyFlow.jl/stable",
@@ -15,6 +16,7 @@ makedocs(
         "Home" => "index.md",
         "Manual" => [
             "Getting Started" => "man/getting_started.md",
+            "Tutorial" => "man/tutorial.md",
             "Backends and Metrics" => "man/backends_and_metrics.md",
         ],
         "API" => "api.md",
