@@ -32,10 +32,22 @@ const MIN_BLOCK_SIZE    = 10
 const _CACHE_PAD        = 8    # elements per cache line (64 bytes / 8 bytes)
 
 """
-    NetworkSimplexSolver{V}
+    NetworkSimplexSolver{V<:AbstractFloat}
+    NetworkSimplexSolver(max_n0, max_n1)
 
-Pre-allocated workspace for network simplex on a complete bipartite graph.
-All arrays are allocated once for the maximum problem size; no hot-path allocation.
+Pre-allocated workspace for the network simplex algorithm on a complete
+bipartite transportation graph with up to `max_n0` sources and `max_n1`
+targets. All arrays are allocated once for the maximum problem size; the
+solver itself ([`network_simplex!`](@ref)) performs no hot-path allocation.
+
+The unparameterized constructor defaults to `Float64`.
+
+This is the low-level solver underlying the `:ns64`/`:ot64`/`:ns32`/`:ot32`
+backends; most users should use [`emd`](@ref)/[`emds`](@ref) instead. After a
+solve, `total_cost`, `status`, and `n_iters` hold the result and diagnostics.
+
+Based on [LEMON](https://lemon.cs.elte.hu)'s network simplex implementation,
+with optional parallel entering-arc search following Kara & Özturan (2022).
 """
 mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     # ── Dimensions ────────────────────────────────────────────────────────────
@@ -179,10 +191,19 @@ NetworkSimplexSolver(max_n0::Int, max_n1::Int) = NetworkSimplexSolver{Float64}(m
 # ── Initialization ────────────────────────────────────────────────────────────
 
 """
-    network_simplex!(ns, source_weights, target_weights; max_iter) -> Symbol
+    network_simplex!(ns, source_weights, target_weights; max_iter=100_000) -> Symbol
 
-Solve the min-cost transportation problem. Costs must be set in ns.costs[1:n0*n1].
-Returns status: :optimal, :infeasible, :unbounded, :supply_mismatch, :max_iter.
+Solve the minimum-cost transportation problem between `source_weights` and
+`target_weights` on the complete bipartite graph, using the pre-allocated
+[`NetworkSimplexSolver`](@ref) `ns`.
+
+Arc costs must be filled in `ns.costs[1:n0*n1]` beforehand, in row-major
+order: the arc from source `i` to target `j` is at index `(i-1)*n1 + j`.
+Source and target weights must sum to the same total (within tolerance).
+
+Returns a status `Symbol`, one of `:optimal`, `:infeasible`, `:unbounded`,
+`:supply_mismatch`, or `:max_iter`. On success the objective value is in
+`ns.total_cost` and the optimal flows in `ns.flows[1:n0*n1]`.
 """
 function network_simplex!(ns::NetworkSimplexSolver{V},
                           source_weights::AbstractVector{V},

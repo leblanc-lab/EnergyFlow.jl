@@ -66,7 +66,8 @@ Available metrics: `EuclideanMetric`, `SquaredEuclideanMetric`, `EtaPhiMetric`, 
 ### Reusable workspace
 
 ```julia
-ws = EMDWorkspace(beta=1.0, R=1.0, norm=true)
+n = maximum(size(e, 1) for e in events)   # largest particle count
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
 val = emd!(ws, events[1], events[2])
 ```
 
