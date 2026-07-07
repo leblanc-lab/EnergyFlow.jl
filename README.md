@@ -75,6 +75,7 @@ val = emd!(ws, events[1], events[2])
 
 - [src/](src/) — package source
 - [example/emd/](example/emd/) — runnable EMD example ([.jl](example/emd/example_emd.jl), [.ipynb](example/emd/example_emd.ipynb), [walkthrough](example/emd/example_emd.md))
+- [example/isotropy/](example/isotropy/) — event isotropy event shape, ring/cylinder (hadron) and sphere (lepton collider) ([.jl](example/isotropy/example_isotropy.jl), [walkthrough](example/isotropy/example_isotropy.md))
 - [test/](test/) — unit tests
 - [benchmark/](benchmark/) — performance benchmarks
 - [data/](data/) — sample HepMC3 events
