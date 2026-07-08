@@ -49,11 +49,16 @@ for (setup_name, evs, ref, metric) in setups
     end
 end
 
-# Save results
+# Save results — file is tagged with the thread count so isotropy_compare.jl can
+# show single-thread (solver-fair) and multi-thread (workload) side by side. Run
+# this benchmark once per thread count, e.g. `julia --project=.` and
+# `julia --project=. -t 8`.
+nthr = Threads.nthreads()
 mkpath(joinpath(@__DIR__, "result"))
-open(joinpath(@__DIR__, "result", "isotropy_julia.md"), "w") do io
+outfile = "isotropy_julia_t$(nthr).md"
+open(joinpath(@__DIR__, "result", outfile), "w") do io
     println(io, "# Event Isotropy Benchmark — Julia EnergyFlow.jl")
-    println(io, "\nJulia $(VERSION), $(Threads.nthreads()) thread(s)")
+    println(io, "\nJulia $(VERSION), $(nthr) thread(s)")
     println(io, "ring: N points in φ, (π/(π-2))·(1-cos Δφ); cylinder: 16×$(floor(Int, ymax*16/π)) grid, |y| ≤ $ymax")
     println(io, "sphere: HEALPix unit sphere (192/48 points), 2·(1-cos θ) on 3-momentum directions\n")
     println(io, "| Setup | Backend | Time (s) | Events | Mean isotropy |")
@@ -63,4 +68,4 @@ open(joinpath(@__DIR__, "result", "isotropy_julia.md"), "w") do io
                 r.setup, r.backend, r.time_s, r.events, r.mean_iso)
     end
 end
-println("\nResults saved to result/isotropy_julia.md")
+println("\nResults saved to result/$outfile")
