@@ -15,6 +15,7 @@ makedocs(
     pages=[
         "Home" => "index.md",
         "Manual" => [
+            "Just Run It (No Julia Experience)" => "man/just_run_it.md",
             "Getting Started" => "man/getting_started.md",
             "Tutorial" => "man/tutorial.md",
             "Backends and Metrics" => "man/backends_and_metrics.md",
