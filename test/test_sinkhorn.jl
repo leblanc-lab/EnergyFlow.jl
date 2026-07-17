@@ -197,4 +197,32 @@ end
     @test max_rel_err < 0.10
 end
 
+# ─────────────────────────────────────────────────────────────────────
+# Test 7: Pairwise Sinkhorn — cross branch + single-event edge case
+# ─────────────────────────────────────────────────────────────────────
+@testset "Sinkhorn cross-pairwise" begin
+    events_a = [random_event(8) for _ in 1:4]
+    events_b = [random_event(8) for _ in 1:5]
+
+    ns_results = emds_ns64(events_a, events_b; R=1.0, beta=1.0, norm=true)
+    sk_results = emds_sinkhorn(events_a, events_b; R=1.0, beta=1.0, norm=true,
+                                epsilon=0.001, annealing=true)
+
+    @test size(sk_results) == (4, 5)
+    max_rel_err = 0.0
+    for i in eachindex(ns_results)
+        if ns_results[i] > 1e-10
+            max_rel_err = max(max_rel_err,
+                              abs(sk_results[i] - ns_results[i]) / ns_results[i])
+        end
+    end
+    test_log("\n  Cross-pairwise (4x5): max relative error = $(round(max_rel_err, digits=6))")
+    @test max_rel_err < 0.10
+end
+
+@testset "Sinkhorn single-event self-pairwise (npairs == 0)" begin
+    sk = emds_sinkhorn([random_event(8)]; R=1.0, beta=1.0, norm=true, epsilon=0.001)
+    @test length(sk) == 0
+end
+
 test_log("\nAll Sinkhorn tests completed!")
