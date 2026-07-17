@@ -452,5 +452,92 @@ end
     @test dists[1] > 0
 end
 
+@testset "_pairwise_parallel! — partition correctness" begin
+    nthreads = Threads.nthreads()
+    sizes = [0, 1, 2, 3, 7,
+             64 * nthreads,           # forces bsize ≥ 2
+             128 * nthreads + 13,     # bsize > 1 with a partial trailing block
+             2560 * nthreads]         # forces bsize clamped at 64
+    for npairs in sizes
+        test_log("  _pairwise_parallel! npairs=$npairs (nthreads=$nthreads)")
+        counter = Threads.Atomic{Int}(0)     # counts workspace creations
+        owner   = zeros(Int, npairs)         # 1-based id of the task that saw each k
+        make_ws() = Threads.atomic_add!(counter, 1) + 1   # ws is just its own id
+        work!(ws, k) = (owner[k] = ws)
+
+        EnergyFlow._pairwise_parallel!(npairs, make_ws, work!)
+
+        ntasks = npairs == 0 ? 0 : clamp(nthreads, 1, npairs)
+        # exactly one workspace created per spawned task (no per-item allocation)
+        @test counter[] == ntasks
+
+        npairs == 0 && continue
+
+        # every index visited exactly once (init 0 ⇒ a remaining 0 is a gap)
+        @test all(>(0), owner)
+        @test length(unique(owner)) == ntasks   # each task did some work, no extras
+
+        # block-cyclic layout: whole blocks owned by one task, repeating every ntasks
+        bsize   = clamp(npairs ÷ (32 * ntasks), 1, 64)
+        blockof(k) = (k - 1) ÷ bsize
+        for k in 2:npairs                        # (a) one owner per block
+            if blockof(k) == blockof(k - 1)
+                @test owner[k] == owner[k - 1]
+            end
+        end
+        nblocks = blockof(npairs) + 1            # (b) owners cycle with period ntasks
+        for b in 0:(nblocks - 1 - ntasks)
+            @test owner[b * bsize + 1] == owner[(b + ntasks) * bsize + 1]
+        end
+    end
+end
+
+@testset "Edge case: single-event self-pairwise (npairs == 0)" begin
+    test_log("  Single event ⇒ zero pairs, must not error (regression)")
+    events = create_simple_events(1)
+
+    for f in (emds_ns64, emds_ot64, emds_ns32, emds_ot32)
+        dists = f(events; R=1.0, beta=1.0, norm=true)
+        @test length(dists) == 0
+    end
+
+    # in-place with a correctly-sized (zero-length) buffer
+    results = Vector{Float64}(undef, 0)
+    ret = emds_ns64!(results, events; R=1.0, beta=1.0, norm=true)
+    @test ret === results
+    @test length(ret) == 0
+end
+
+@testset "Large self-pairwise consistency (exercises block-cyclic bsize > 1)" begin
+    n = 25                                       # 300 pairs ⇒ bsize > 1 on 1–2 threads
+    events = create_varied_events(n)
+    dists = emds_ns64(events; R=1.0, beta=1.0, norm=true)
+
+    npairs = n * (n - 1) ÷ 2
+    @test length(dists) == npairs
+
+    k = 0                                         # scipy pdist / _flat_to_pair order
+    for i in 1:(n - 1), j in (i + 1):n
+        k += 1
+        d = emd_ns64(events[i], events[j]; R=1.0, beta=1.0, norm=true)
+        @test dists[k] ≈ d atol=1e-10
+    end
+    test_log("    verified all $npairs self-pairs against individual emd calls")
+end
+
+@testset "Large cross-pairwise consistency (exercises block-cyclic bsize > 1)" begin
+    na, nb = 12, 13                               # 156 pairs
+    events_a = create_varied_events(na)
+    events_b = create_varied_events(nb)
+    D = emds_ns64(events_a, events_b; R=1.0, beta=1.0, norm=true)
+
+    @test size(D) == (na, nb)
+    for i in 1:na, j in 1:nb
+        d = emd_ns64(events_a[i], events_b[j]; R=1.0, beta=1.0, norm=true)
+        @test D[i, j] ≈ d atol=1e-10
+    end
+    test_log("    verified all $(na * nb) cross-pairs against individual emd calls")
+end
+
 test_log("\nAll PairwiseEMD tests completed!")
 

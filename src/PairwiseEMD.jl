@@ -25,6 +25,37 @@ function _flat_to_pair(k::Int, n::Int)
     return i, j
 end
 
+"""
+Run `work!(ws, k)` for every `k in 1:npairs`, distributing the range across
+threads block-cyclically — one spawned task and one reusable workspace
+(`make_ws()`) per task, with blocks of consecutive pairs dealt round-robin
+to the tasks.
+
+The assignment is block-cyclic rather than contiguous because per-pair cost
+varies with event multiplicity and correlates with pair index (pairs sharing a
+high-multiplicity event `i` are adjacent), so contiguous chunks have unequal
+total cost and the slowest chunk sets the wall time. Dealing blocks round-robin
+decorrelates cost from task.
+"""
+function _pairwise_parallel!(npairs::Int, make_ws::F1, work!::F2) where {F1, F2}
+    npairs == 0 && return nothing
+    ntasks = clamp(Threads.nthreads(), 1, npairs)
+    bsize  = clamp(npairs ÷ (32 * ntasks), 1, 64)
+    stride = ntasks * bsize
+    @sync for t in 1:ntasks
+        Threads.@spawn begin
+            ws = make_ws()
+            for start in ((t - 1) * bsize + 1):stride:npairs
+                stop = min(start + bsize - 1, npairs)
+                for k in start:stop
+                    work!(ws, k)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 # ─────────────────────────────────────────────────────────────────────
 # Pairwise EMD internals (tuple-based interface)
 # ─────────────────────────────────────────────────────────────────────
@@ -44,15 +75,12 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
 
     results = Vector{V}(undef, npairs)
 
-    ws_key = gensym(:pairwise_ws)
-
-    _work_pair!(k) = begin
-        ws = get!(task_local_storage(), ws_key) do
-            w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
-            w.parallel_threshold = typemax(Int)
-            w
-        end::EMDWorkspace{V}
-
+    make_ws() = begin
+        w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
+        w.parallel_threshold = typemax(Int)
+        w
+    end
+    work!(ws, k) = begin
         i, j = _flat_to_pair(k, nev)
 
         w0, c0 = events[i]
@@ -64,16 +92,7 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
                            max_iter=max_iter, arc_mixing=arc_mixing)
         results[k] = val
     end
-
-    @static if VERSION >= v"1.11"
-        Threads.@threads :greedy for k in 1:npairs
-            _work_pair!(k)
-        end
-    else
-        Threads.@threads for k in 1:npairs
-            _work_pair!(k)
-        end
-    end
+    _pairwise_parallel!(npairs, make_ws, work!)
 
     if symmetric
         return results
@@ -109,16 +128,13 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
 
     D = Matrix{V}(undef, na, nb)
 
-    ws_key = gensym(:pairwise_ws)
-
     npairs = na * nb
-    _work_pair!(k) = begin
-        ws = get!(task_local_storage(), ws_key) do
-            w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
-            w.parallel_threshold = typemax(Int)
-            w
-        end::EMDWorkspace{V}
-
+    make_ws() = begin
+        w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
+        w.parallel_threshold = typemax(Int)
+        w
+    end
+    work!(ws, k) = begin
         i = (k - 1) ÷ nb + 1
         j = mod1(k, nb)
 
@@ -131,16 +147,7 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
                            max_iter=max_iter, arc_mixing=arc_mixing)
         D[i, j] = val
     end
-
-    @static if VERSION >= v"1.11"
-        Threads.@threads :greedy for k in 1:npairs
-            _work_pair!(k)
-        end
-    else
-        Threads.@threads for k in 1:npairs
-            _work_pair!(k)
-        end
-    end
+    _pairwise_parallel!(npairs, make_ws, work!)
 
     return D
 end
@@ -161,15 +168,12 @@ function _pairwise_emd_self!(results::AbstractVector{V},
 
     max_n = maximum(length(e[1]) for e in events)
 
-    ws_key = gensym(:pairwise_ws)
-
-    _work_pair!(k) = begin
-        ws = get!(task_local_storage(), ws_key) do
-            w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
-            w.parallel_threshold = typemax(Int)
-            w
-        end::EMDWorkspace{V}
-
+    make_ws() = begin
+        w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
+        w.parallel_threshold = typemax(Int)
+        w
+    end
+    work!(ws, k) = begin
         i, j = _flat_to_pair(k, nev)
 
         w0, c0 = events[i]
@@ -181,16 +185,7 @@ function _pairwise_emd_self!(results::AbstractVector{V},
                            max_iter=max_iter, arc_mixing=arc_mixing)
         results[k] = val
     end
-
-    @static if VERSION >= v"1.11"
-        Threads.@threads :greedy for k in 1:npairs
-            _work_pair!(k)
-        end
-    else
-        Threads.@threads for k in 1:npairs
-            _work_pair!(k)
-        end
-    end
+    _pairwise_parallel!(npairs, make_ws, work!)
 
     return results
 end

@@ -511,15 +511,10 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         npairs = n * (n - 1) ÷ 2
         results = Vector{V}(undef, npairs)
 
-        ws_key = gensym(:sinkhorn_ws)
-
-        _work_self(k) = begin
-            ws = get!(task_local_storage(), ws_key) do
-                SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
-                                     epsilon=epsilon, max_iter=max_iter_sinkhorn,
-                                     tol=sinkhorn_tol, annealing=annealing)
-            end::SinkhornWorkspace{V}
-
+        make_ws_self() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
+                                              epsilon=epsilon, max_iter=max_iter_sinkhorn,
+                                              tol=sinkhorn_tol, annealing=annealing)
+        work_self!(ws, k) = begin
             i, j = _flat_to_pair(k, n)
             w0, c0 = tuples0[i]
             w1, c1 = tuples0[j]
@@ -527,16 +522,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             results[k] = val
         end
-
-        @static if VERSION >= v"1.11"
-            Threads.@threads :greedy for k in 1:npairs
-                _work_self(k)
-            end
-        else
-            Threads.@threads for k in 1:npairs
-                _work_self(k)
-            end
-        end
+        _pairwise_parallel!(npairs, make_ws_self, work_self!)
         return results
     else
         tuples1 = _unpack(events1)
@@ -544,16 +530,11 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         nb = length(tuples1)
         D = Matrix{V}(undef, na, nb)
 
-        ws_key = gensym(:sinkhorn_ws)
-
         npairs = na * nb
-        _work_cross!(k) = begin
-            ws = get!(task_local_storage(), ws_key) do
-                SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
-                                     epsilon=epsilon, max_iter=max_iter_sinkhorn,
-                                     tol=sinkhorn_tol, annealing=annealing)
-            end::SinkhornWorkspace{V}
-
+        make_ws_cross() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
+                                               epsilon=epsilon, max_iter=max_iter_sinkhorn,
+                                               tol=sinkhorn_tol, annealing=annealing)
+        work_cross!(ws, k) = begin
             i = (k - 1) ÷ nb + 1
             j = mod1(k, nb)
             w0, c0 = tuples0[i]
@@ -562,16 +543,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             D[i, j] = val
         end
-
-        @static if VERSION >= v"1.11"
-            Threads.@threads :greedy for k in 1:npairs
-                _work_cross!(k)
-            end
-        else
-            Threads.@threads for k in 1:npairs
-                _work_cross!(k)
-            end
-        end
+        _pairwise_parallel!(npairs, make_ws_cross, work_cross!)
         return D
     end
 end
