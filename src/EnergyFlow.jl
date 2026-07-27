@@ -37,10 +37,6 @@ and `:sinkhorn` (approximate entropic OT). See [`set_backend`](@ref).
 """
 module EnergyFlow
 
-# Disable precompilation: @threads closures precompiled with 1 thread (Julia 1.12)
-# are broken at runtime with multiple threads. Runtime JIT compilation is correct.
-__precompile__(false)
-
 # Core solver
 include("NetworkSimplex.jl")
 
@@ -81,5 +77,8 @@ export SinkhornWorkspace
 export emd, emd!, emds, emds!
 export set_backend, get_backend
 export load_hepmc3_events
+
+# PrecompileTools workload (must be last: exercises the fully-defined API).
+include("Precompile.jl")
 
 end # module

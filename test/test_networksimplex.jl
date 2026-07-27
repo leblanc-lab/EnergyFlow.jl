@@ -251,22 +251,33 @@ end
     ns.thread_work_start[1] = 1
     ns.thread_work_end[1] = 1
 
-    worker = Threads.@spawn EnergyFlow._paper_worker_loop!(ns, 1)
+    # This exercise runs the worker as a separate task and busy-waits on
+    # done_count with only GC.safepoint() (no yield). That is only sound with a
+    # real second OS thread: at nthreads=1 the worker and the waiter contend for
+    # the single thread and deadlock. Guard it like the sibling testset above
+    # ("Paper mode worker lifecycle coverage" uses `if nworkers > 0`). Paper mode
+    # only ever has workers when nthreads > 1, so nthreads=1 has nothing to cover.
+    if Threads.nthreads() > 1
+        worker = Threads.@spawn EnergyFlow._paper_worker_loop!(ns, 1)
 
-    Threads.atomic_add!(ns.done_count, 1)
-    Threads.atomic_add!(ns.work_epoch, 1)
+        Threads.atomic_add!(ns.done_count, 1)
+        Threads.atomic_add!(ns.work_epoch, 1)
 
-    while ns.done_count[] > 0
-        GC.safepoint()
+        while ns.done_count[] > 0
+            GC.safepoint()
+        end
+
+        test_log("  worker result: best_arc=$(ns.thread_best_arc[1]) min_rc=$(ns.thread_min_rc[1])")
+
+        @test ns.thread_best_arc[1] == 1
+        @test ns.thread_min_rc[1] < 0.0
+
+        Threads.atomic_xchg!(ns.work_epoch, -1)
+        wait(worker)
+    else
+        test_log("  worker loop: skipped (nthreads=1)")
+        @test true
     end
-
-    test_log("  worker result: best_arc=$(ns.thread_best_arc[1]) min_rc=$(ns.thread_min_rc[1])")
-
-    @test ns.thread_best_arc[1] == 1
-    @test ns.thread_min_rc[1] < 0.0
-
-    Threads.atomic_xchg!(ns.work_epoch, -1)
-    wait(worker)
 end
 
 @testset "Leaving arc and state flip branch" begin

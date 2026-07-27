@@ -135,6 +135,13 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
         max_arc_num     = max_n0 * max_n1
         max_node_num    = max_n0 + max_n1 + 1
         max_all_arc_num = max_arc_num + max_node_num - 1
+        # nt sizes the per-thread scratch and paper-mode worker-pool arrays. It is
+        # read at RUNTIME here (not constant-folded into precompiled code), so a
+        # solver built at runtime always matches the runtime thread count.
+        # INVARIANT: never construct a NetworkSimplexSolver/EMDWorkspace at module
+        # load or inside a precompile workload and store it in a global — that would
+        # freeze nt at the (usually 1) precompile-time thread count. Workspaces must
+        # be built at runtime (they are: in the emd/emds frontends and pairwise tasks).
         nt = Threads.nthreads()
         new{V}(
             0, 0, 0, 0, 0, max_n0, max_n1,
