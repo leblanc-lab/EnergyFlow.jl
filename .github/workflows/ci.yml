@@ -54,11 +54,6 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  # Locks in ROADMAP Task 0.2: precompilation is re-enabled, and precompiling
-  # with ONE thread must not break the threaded code (pairwise @threads, parallel
-  # @spawn cost-fill, paper-mode worker pool) when later run with MANY threads.
-  # The two steps use identical compile flags and the default project, so the
-  # multi-thread run reuses the 1-thread precompile cache instead of rebuilding it.
   precompile-thread-safety:
     name: 1-thread-precompile → multi-thread-run (julia ${{ matrix.julia-version }})
     timeout-minutes: 10
@@ -88,6 +83,4 @@ jobs:
       - name: Run tests with multiple threads (reusing the 1-thread cache)
         env:
           JULIA_NUM_THREADS: "4"
-        # Driven via runtests.jl (not Pkg.test) so this step reuses the cache
-        # built above rather than recompiling under Pkg.test's own flags.
         run: julia --project=. test/runtests.jl

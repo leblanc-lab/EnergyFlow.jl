@@ -42,7 +42,7 @@ using PrecompileTools: @setup_workload, @compile_workload
         # ── Each concrete GroundMetric, norm=true/false, Float64 + Float32 ──
         for m in dispatch_metrics, nrm in (true, false)
             emd(e1, e2; backend=:ns64, R=1.0, beta=1.0, norm=nrm, metric=m)
-            emd(e1, e2; backend=:ns32, R=1.0, beta=1.0, norm=nrm, metric=m)
+            emd(e1_32, e2_32; backend=:ns32, R=1.0, beta=1.0, norm=nrm, metric=m)
         end
         # PrecomputedMetric (single pair, 2×2 cost, via a reused workspace)
         let pc = PrecomputedMetric([0.0 1.0; 1.0 0.0]),
