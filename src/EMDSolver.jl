@@ -20,16 +20,24 @@
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    EMDWorkspace{V}
+    EMDWorkspace{V<:AbstractFloat}
 
-Pre-allocated workspace for repeated EMD computations. Avoids re-allocation
-when computing many EMDs of similar sizes.
+Pre-allocated workspace for repeated EMD computations with the
+network-simplex backends. Construct once, then pass to [`emd!`](@ref) (or the
+backend-specific `emd_ns64!` etc.) to avoid per-call allocations.
+
+The EMD parameters (`beta`, `R`, `norm`, `metric`) are stored in the
+workspace and used by every solve.
 
 # Fields
-- `ns`: NetworkSimplex solver workspace
+- `ns`: [`NetworkSimplexSolver`](@ref) workspace
 - `beta`, `R`: EMD parameters
-- `norm`: if true, normalize weights before solving
-- `parallel_threshold`: use parallel cost fill when n0_real * n1_real >= this value (default 40_000)
+- `norm`: if `true`, normalize event weights to sum to 1 before solving
+- `metric`: ground distance metric ([`GroundMetric`](@ref))
+- `parallel_threshold`: fill the cost matrix in parallel when
+  `n0 * n1 >= parallel_threshold` (default `40_000`)
+
+See also [`SinkhornWorkspace`](@ref).
 """
 mutable struct EMDWorkspace{V<:AbstractFloat}
     ns::NetworkSimplexSolver{V}
@@ -51,10 +59,29 @@ mutable struct EMDWorkspace{V<:AbstractFloat}
 end
 
 """
-    EMDWorkspace{V}(max_n0, max_n1; beta=1.0, R=1.0, norm=true)
+    EMDWorkspace(max_n0, max_n1; beta=1.0, R=1.0, norm=true, metric=EuclideanMetric())
+    EMDWorkspace{V}(max_n0, max_n1; kwargs...)
 
-Create a workspace for computing EMD between distributions of up to
-max_n0 and max_n1 particles.
+Create a workspace for computing EMDs between events of up to `max_n0` and
+`max_n1` particles. The unparameterized form defaults to `Float64`; use
+`EMDWorkspace{Float32}` for the `:ns32`/`:ot32` backends.
+
+# Arguments
+- `max_n0`, `max_n1`: maximum particle counts of the two events in any
+  subsequent `emd!` call (one extra slot is reserved internally for the
+  fictitious particle used when `norm=false`).
+
+# Keywords
+- `beta`, `R`, `norm`, `metric`: EMD parameters applied to every solve with
+  this workspace; see [`emd`](@ref) for their meaning. Note that `norm`
+  defaults to `true` here, unlike `emd`.
+
+# Example
+```julia
+n = maximum(size(e, 1) for e in events)
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
+val = emd!(ws, events[1], events[2])
+```
 """
 function EMDWorkspace{V}(max_n0::Int, max_n1::Int;
                          beta::Real = 1.0, R::Real = 1.0, norm::Bool = true,
@@ -215,10 +242,13 @@ function emd_ns64!(ws::EMDWorkspace{V},
 end
 
 """
-    emd_ns64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing, n_iter_max=100_000) -> Float64
+    emd_ns64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
+             n_iter_max=100_000, metric=EuclideanMetric()) -> Float64
 
 Compute EMD using the Network Simplex Float64 backend.
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ns64!`.
+
+Equivalent to [`emd`](@ref) with `backend=:ns64`.
 
 # Arguments
 - `ev0`, `ev1`: M×(1+gdim) matrices. Column 1 = particle weights (pT);
@@ -228,6 +258,7 @@ Allocates a fresh workspace each call. For repeated calls, prefer `emd_ns64!`.
 - `norm`: normalize weights to sum to 1 before solving (default false).
 - `gdim`: number of coordinate dimensions to use. `nothing` = use all remaining columns.
 - `n_iter_max`: max network-simplex iterations (default 100_000).
+- `metric`: ground distance metric (default [`EuclideanMetric()`](@ref EuclideanMetric)).
 
 # Returns
 - `Float64` EMD value.
@@ -278,10 +309,12 @@ function emd_ot64!(ws::EMDWorkspace{V},
 end
 
 """
-    emd_ot64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing, n_iter_max=100_000) -> Float64
+    emd_ot64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
+             n_iter_max=100_000, metric=EuclideanMetric()) -> Float64
 
 Compute EMD using the OT-style Float64 backend (arc mixing enabled).
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ot64!`.
+Arguments are as in [`emd_ns64`](@ref).
 """
 function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   R::Real        = 1.0,
@@ -334,10 +367,12 @@ function emd_ns32!(ws::EMDWorkspace{Float32},
 end
 
 """
-    emd_ns32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing, n_iter_max=100_000) -> Float32
+    emd_ns32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
+             n_iter_max=100_000, metric=EuclideanMetric()) -> Float32
 
 Compute EMD using the Network Simplex Float32 backend.
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ns32!`.
+Arguments are as in [`emd_ns64`](@ref).
 """
 function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   R::Real        = 1.0,
@@ -381,10 +416,12 @@ function emd_ot32!(ws::EMDWorkspace{Float32},
 end
 
 """
-    emd_ot32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing, n_iter_max=100_000) -> Float32
+    emd_ot32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
+             n_iter_max=100_000, metric=EuclideanMetric()) -> Float32
 
 Compute EMD using the OT-style Float32 backend (arc mixing enabled).
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ot32!`.
+Arguments are as in [`emd_ns64`](@ref).
 """
 function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   R::Real        = 1.0,

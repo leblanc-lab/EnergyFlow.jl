@@ -34,3 +34,11 @@ println("Self-pairwise ($(length(dists)) pairs): dists[1]=$(dists[1])")
 # With EtaPhi metric
 D2 = emds(events[1:10], events[11:20]; R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 println("Cross EtaPhi: D[1,1]=$(D2[1,1])")
+
+# ── Workspace reuse ──
+# For repeated single-pair calls, pre-allocate a workspace sized for the
+# largest events and use emd! (parameters live in the workspace).
+n = maximum(size(e, 1) for e in events)
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
+val3 = emd!(ws, events[1], events[2])
+println("\nEMD via reusable workspace: $val3")

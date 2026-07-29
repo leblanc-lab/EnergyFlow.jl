@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -15,6 +16,8 @@ jobs:
         julia-version: ["lts", "1", "pre"]
         include:
           - julia-version: "pre"
+            allow-failure: true
+          - julia-version: "lts"
             allow-failure: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix['allow-failure'] || false }}
@@ -33,6 +36,9 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run tests
+        env:
+          # Run multithreaded so paper-mode / parallel network-simplex paths run in tests
+          JULIA_NUM_THREADS: "2"
         run: |
           julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
@@ -47,3 +53,34 @@ jobs:
           files: lcov.info
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  precompile-thread-safety:
+    name: 1-thread-precompile → multi-thread-run (julia ${{ matrix.julia-version }})
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ["lts", "1"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+
+      - uses: julia-actions/cache@v2
+
+      - name: Install dependencies
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Precompile with a single thread
+        env:
+          JULIA_NUM_THREADS: "1"
+        run: julia --project=. -e 'using Pkg; Pkg.precompile(); using EnergyFlow'
+
+      - name: Run tests with multiple threads (reusing the 1-thread cache)
+        env:
+          JULIA_NUM_THREADS: "4"
+        run: julia --project=. test/runtests.jl

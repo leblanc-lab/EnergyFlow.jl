@@ -90,10 +90,11 @@ All single-pair keywords (`backend`, `metric`, `R`, `beta`, `norm`, …) work he
 
 ## 4. Reusing workspaces
 
-For repeated calls in a tight loop, allocate once and reuse with the in-place forms `emd!` / `emds!`:
+For repeated calls in a tight loop, allocate once and reuse with the in-place forms `emd!` / `emds!`. The workspace is sized for the largest events it will see, and holds the EMD parameters (`beta`, `R`, `norm`, `metric`):
 
 ```julia
-ws = EMDWorkspace(beta=1.0, R=1.0, norm=true)
+n = maximum(size(e, 1) for e in events)   # largest particle count
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
 val = emd!(ws, events[1], events[2])
 ```
 

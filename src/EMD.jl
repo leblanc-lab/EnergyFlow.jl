@@ -22,9 +22,31 @@ const AVAILABLE_BACKENDS = [:ns64, :ot64, :ns32, :ot32, :sinkhorn]
 const EMD_BACKEND = Ref(:ns64)
 
 """
-    set_backend(backend::Symbol)
+    set_backend(backend::Symbol) -> Symbol
 
-Set the default EMD backend. Available: `:ns64`, `:ot64`, `:ns32`, `:ot32`, `:sinkhorn`.
+Set the global default EMD solver backend used by [`emd`](@ref), [`emd!`](@ref),
+[`emds`](@ref) and [`emds!`](@ref) when no `backend` keyword is given.
+
+Available backends:
+
+| Backend     | Solver                              | Precision | Exact? |
+|:------------|:------------------------------------|:----------|:-------|
+| `:ns64`     | Network simplex *(default)*         | `Float64` | yes    |
+| `:ot64`     | Network simplex with arc mixing     | `Float64` | yes    |
+| `:ns32`     | Network simplex                     | `Float32` | yes    |
+| `:ot32`     | Network simplex with arc mixing     | `Float32` | yes    |
+| `:sinkhorn` | Entropy-regularised OT (Sinkhorn)   | `Float64` | no     |
+
+Returns the newly set backend. Throws an error for unknown backends.
+
+# Example
+```julia
+set_backend(:ot64)
+emd(ev0, ev1)              # now uses :ot64
+emd(ev0, ev1; backend=:ns64)  # per-call override
+```
+
+See also [`get_backend`](@ref).
 """
 function set_backend(backend::Symbol)
     if backend ∉ AVAILABLE_BACKENDS
@@ -37,7 +59,9 @@ end
 """
     get_backend() -> Symbol
 
-Return the current default EMD backend.
+Return the current global default EMD backend (initially `:ns64`).
+
+See also [`set_backend`](@ref).
 """
 get_backend() = EMD_BACKEND[]
 
@@ -46,20 +70,40 @@ get_backend() = EMD_BACKEND[]
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd!(ws, ev0, ev1; backend=get_backend(), gdim=nothing, n_iter_max=100_000) -> Float64
+    emd!(ws, ev0, ev1; backend=get_backend(), gdim=nothing, n_iter_max=100_000)
 
-Compute EMD between two events using pre-allocated workspace `ws`.
-Dispatches to the active backend.
+Compute the EMD between two events using a pre-allocated workspace,
+avoiding per-call allocations. This is the fastest path when computing many
+EMDs in a loop.
+
+The EMD parameters (`beta`, `R`, `norm`, `metric`) are read from the
+workspace, not passed as keywords — set them when constructing it.
 
 # Arguments
-- `ws::EMDWorkspace`: pre-allocated workspace (beta, R, norm are read from ws).
-- `ev0`, `ev1`: EnergyFlow-format event matrices (M×(1+gdim)).
-- `backend`: backend to use (default: current global backend).
-- `gdim`: coordinate dimensions to use (`nothing` = all).
-- `n_iter_max`: max iterations for iterative solvers.
+- `ws`: an [`EMDWorkspace`](@ref) (for the network-simplex backends) or a
+  [`SinkhornWorkspace`](@ref) (for the Sinkhorn backend). Must be large enough
+  for the events being compared.
+- `ev0`, `ev1`: event matrices, `M × (1 + d)` with column 1 = particle weights
+  and columns `2:(1+d)` = coordinates.
+
+# Keywords
+- `backend`: solver backend (default: current global backend; ignored when
+  `ws` is a `SinkhornWorkspace`, which always uses `:sinkhorn`).
+- `gdim`: number of coordinate dimensions to use (`nothing` = all columns
+  after the first).
+- `n_iter_max`: maximum solver iterations.
 
 # Returns
-- `Float64` EMD value.
+The EMD value (`Float64` or `Float32` matching the workspace precision).
+
+# Example
+```julia
+n = maximum(size(e, 1) for e in events)
+ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
+vals = [emd!(ws, events[1], e) for e in events[2:end]]
+```
+
+See also [`emd`](@ref), [`emds!`](@ref).
 """
 function emd!(ws::EMDWorkspace,
               ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
@@ -99,19 +143,51 @@ end
 
 """
     emd(ev0, ev1; backend=get_backend(), R=1.0, beta=1.0, norm=false,
-        gdim=nothing, n_iter_max=100_000) -> Float64
+        gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
 
-Compute EMD between two events. Allocates a fresh workspace.
-For repeated calls, prefer `emd!` with a pre-allocated workspace.
+Compute the Energy Mover's Distance between two events. Allocates a fresh
+workspace each call; for repeated calls prefer [`emd!`](@ref) with a
+pre-allocated workspace.
 
 # Arguments
-- `ev0`, `ev1`: M×(1+gdim) event matrices.
-- `backend`: backend to use (default: current global backend).
-- `R`, `beta`, `norm`: EMD parameters.
-- `gdim`, `n_iter_max`: see `emd!`.
+- `ev0`, `ev1`: event matrices, `M × (1 + d)` with one row per particle.
+  Column 1 = particle weights (typically ``p_T``); columns `2:(1+d)` =
+  ground-space coordinates (typically rapidity and azimuth).
+
+# Keywords
+- `backend`: solver backend, one of `:ns64` (default), `:ot64`, `:ns32`,
+  `:ot32`, `:sinkhorn`. See [`set_backend`](@ref).
+- `R`: distance scale; ground distances are divided by `R` before
+  exponentiation. With `norm=false`, `R` controls the relative cost of
+  transporting vs. creating/destroying energy (choose `R ≥ half` the maximum
+  ground distance for a true metric).
+- `beta`: exponent applied to the scaled ground distance (angular exponent).
+- `norm`: if `true`, normalize each event's weights to sum to 1 before
+  solving. If `false` (default) and the total weights differ, the weight
+  difference is handled by a fictitious particle at unit cost, matching the
+  Python EnergyFlow convention.
+- `gdim`: number of coordinate dimensions to use (`nothing` = all columns
+  after the first).
+- `n_iter_max`: maximum solver iterations.
+- `metric`: ground distance metric, a [`GroundMetric`](@ref) instance
+  (default [`EuclideanMetric()`](@ref EuclideanMetric)).
 
 # Returns
-- `Float64` EMD value.
+The EMD value: `Float64` for `:ns64`/`:ot64`/`:sinkhorn`, `Float32` for
+`:ns32`/`:ot32`.
+
+# Example
+```julia
+ev0 = [1.0 0.5 0.1;  0.8 -0.3 0.4]   # 2 particles: pT, y, φ
+ev1 = [0.9 0.4 0.0;  0.7 -0.2 0.3]
+
+emd(ev0, ev1)                                  # default backend/metric
+emd(ev0, ev1; R=0.4, beta=2.0, norm=true)      # EMD parameters
+emd(ev0, ev1; backend=:sinkhorn)               # approximate solver
+emd(ev0, ev1; metric=EtaPhiMetric())           # periodic φ handling
+```
+
+See also [`emds`](@ref), [`emd!`](@ref).
 """
 function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
              backend::Symbol = EMD_BACKEND[],
@@ -143,10 +219,21 @@ end
 
 """
     emds!(results, events0; backend=get_backend(), R=1.0, beta=1.0, norm=false,
-          gdim=nothing, n_iter_max=100_000)
+          gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
 
-In-place self-pairwise EMD: writes to pre-allocated `results` vector
-(flat upper-triangular, length n*(n-1)/2). Dispatches to the active backend.
+In-place self-pairwise EMD: computes all `n*(n-1)/2` pairwise distances among
+`events0` and writes them into the pre-allocated `results` vector (flat
+upper-triangular, SciPy `pdist` row-major order — see [`emds`](@ref)).
+
+Computation is multithreaded over pairs. Keywords are as in [`emds`](@ref).
+Not supported for the `:sinkhorn` backend (use `emds` instead).
+
+# Example
+```julia
+n = length(events)
+results = Vector{Float64}(undef, n * (n - 1) ÷ 2)
+emds!(results, events; norm=true)
+```
 """
 function emds!(results::AbstractVector{<:AbstractFloat},
                events0::AbstractVector{<:AbstractMatrix{<:Real}};
@@ -183,13 +270,39 @@ end
 
 """
     emds(events0, events1=nothing; backend=get_backend(), R=1.0, beta=1.0,
-         norm=false, gdim=nothing, n_iter_max=100_000)
+         norm=false, gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
 
-Compute pairwise EMDs. Dispatches to the active backend.
+Compute pairwise Energy Mover's Distances between collections of events.
+Computation is multithreaded over pairs (start Julia with `-t auto` or set
+`JULIA_NUM_THREADS` to benefit).
+
+# Arguments
+- `events0`: vector of event matrices (each `M × (1 + d)`).
+- `events1`: `nothing` (default) for self-pairwise mode, or a second vector
+  of events for cross-pairwise mode.
+
+# Keywords
+Same as [`emd`](@ref): `backend`, `R`, `beta`, `norm`, `gdim`, `n_iter_max`,
+`metric`.
 
 # Returns
-- Self-pairwise (`events1=nothing`): `Vector{Float64}` of length `n*(n-1)/2`.
-- Cross-pairwise: `Matrix{Float64}` of shape `(length(events0), length(events1))`.
+- **Self-pairwise** (`events1 === nothing`): a `Vector` of length
+  `n*(n-1)/2` containing the strict upper triangle of the distance matrix in
+  SciPy `pdist` (row-major) order — i.e. `(1,2), (1,3), …, (1,n), (2,3), …`.
+- **Cross-pairwise**: a `Matrix` `D` of size
+  `(length(events0), length(events1))` with `D[i, j] = emd(events0[i], events1[j])`.
+
+Element type is `Float64`, or `Float32` for the `:ns32`/`:ot32` backends.
+
+# Example
+```julia
+events = load_hepmc3_events("events.hepmc"; maxevents=20)
+
+dists = emds(events[1:10]; norm=true)              # 45-element Vector
+D     = emds(events[1:10], events[11:20]; norm=true)  # 10×10 Matrix
+```
+
+See also [`emd`](@ref), [`emds!`](@ref).
 """
 function emds(events0::AbstractVector{<:AbstractMatrix{<:Real}},
               events1::Union{Nothing, AbstractVector{<:AbstractMatrix{<:Real}}} = nothing;

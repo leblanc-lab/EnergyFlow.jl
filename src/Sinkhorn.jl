@@ -19,8 +19,34 @@
 
 """
     SinkhornWorkspace{V<:AbstractFloat}
+    SinkhornWorkspace(max_n0, max_n1; beta=1.0, R=1.0, norm=true,
+                      epsilon=0.01, max_iter=5000, tol=1e-9, annealing=true)
 
-Pre-allocated workspace for Sinkhorn OT computation.
+Pre-allocated workspace for approximate EMD computation with the Sinkhorn
+(entropy-regularised OT) backend. Pass to [`emd!`](@ref) or `emd_sinkhorn!`.
+The unparameterized constructor defaults to `Float64`.
+
+# Arguments
+- `max_n0`, `max_n1`: maximum particle counts of the two events in any
+  subsequent solve.
+
+# Keywords
+- `beta`, `R`, `norm`: EMD parameters; see [`emd`](@ref).
+- `epsilon`: entropic regularisation strength. Smaller values approximate the
+  exact EMD more closely but require more iterations.
+- `max_iter`: maximum Sinkhorn iterations per ε-level.
+- `tol`: convergence tolerance on the marginal violation.
+- `annealing`: if `true` (default), start from a large ε and geometrically
+  anneal down to `epsilon`, warm-starting each stage — usually faster and
+  more stable than solving directly at small ε.
+
+!!! note
+    Sinkhorn solves the *regularised* transport problem, so the returned cost
+    carries an entropic bias that shrinks with `epsilon` but never fully
+    vanishes. Use the network-simplex backends for exact values.
+
+After a solve, the fields `total_cost`, `n_iters` and `converged` hold
+diagnostics for the last computation.
 """
 mutable struct SinkhornWorkspace{V<:AbstractFloat}
     # Parameters
@@ -373,9 +399,13 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd_sinkhorn!(ws::SinkhornWorkspace, ev0, ev1; gdim=nothing) -> Float64
+    emd_sinkhorn!(ws::SinkhornWorkspace, ev0, ev1; gdim=nothing)
 
-Compute approximate EMD using Sinkhorn with a pre-allocated workspace.
+Compute an approximate EMD using the Sinkhorn backend with a pre-allocated
+[`SinkhornWorkspace`](@ref). All Sinkhorn parameters (`beta`, `R`, `norm`,
+`epsilon`, `tol`, `annealing`, `max_iter`) are read from the workspace.
+
+Returns the regularised transport cost (same precision as the workspace).
 """
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
@@ -393,7 +423,20 @@ end
                  epsilon=0.01, max_iter_sinkhorn=5000, sinkhorn_tol=1e-9,
                  annealing=true) -> Float64
 
-Compute approximate EMD using Sinkhorn. Allocates a fresh workspace.
+Compute an approximate EMD between two events using the Sinkhorn
+(entropy-regularised OT) solver. Allocates a fresh workspace each call; for
+repeated calls prefer [`emd_sinkhorn!`](@ref).
+
+# Keywords
+- `R`, `beta`, `norm`, `gdim`: as in [`emd`](@ref).
+- `epsilon`: entropic regularisation strength (smaller = closer to exact EMD,
+  slower to converge).
+- `max_iter_sinkhorn`: maximum Sinkhorn iterations per ε-level.
+- `sinkhorn_tol`: convergence tolerance on the marginal violation.
+- `annealing`: use ε-annealing with warm starts (default `true`).
+
+The returned value includes an entropic bias relative to the exact EMD; see
+[`SinkhornWorkspace`](@ref).
 """
 function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                       R::Real        = 1.0,
@@ -427,9 +470,14 @@ end
 """
     emds_sinkhorn(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
                   gdim=nothing, epsilon=0.01, max_iter_sinkhorn=5000,
-                  sinkhorn_tol=1e-9, annealing=true) -> Vector or Matrix
+                  sinkhorn_tol=1e-9, annealing=true)
 
-Pairwise EMDs using the Sinkhorn backend.
+Pairwise approximate EMDs using the Sinkhorn backend, multithreaded over
+pairs. Return conventions match [`emds`](@ref): a flat upper-triangular
+`Vector{Float64}` for self-pairwise mode (`events1 === nothing`), or a
+`Matrix{Float64}` for cross-pairwise mode.
+
+Sinkhorn-specific keywords are as in [`emd_sinkhorn`](@ref).
 """
 function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        events1::Union{Nothing, AbstractVector{<:AbstractMatrix{<:Real}}} = nothing;
@@ -463,15 +511,10 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         npairs = n * (n - 1) ÷ 2
         results = Vector{V}(undef, npairs)
 
-        ws_key = gensym(:sinkhorn_ws)
-
-        Threads.@threads :greedy for k in 1:npairs
-            ws = get!(task_local_storage(), ws_key) do
-                SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
-                                     epsilon=epsilon, max_iter=max_iter_sinkhorn,
-                                     tol=sinkhorn_tol, annealing=annealing)
-            end::SinkhornWorkspace{V}
-
+        make_ws_self() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
+                                              epsilon=epsilon, max_iter=max_iter_sinkhorn,
+                                              tol=sinkhorn_tol, annealing=annealing)
+        work_self!(ws, k) = begin
             i, j = _flat_to_pair(k, n)
             w0, c0 = tuples0[i]
             w1, c1 = tuples0[j]
@@ -479,6 +522,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             results[k] = val
         end
+        _pairwise_parallel!(npairs, make_ws_self, work_self!)
         return results
     else
         tuples1 = _unpack(events1)
@@ -486,16 +530,11 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         nb = length(tuples1)
         D = Matrix{V}(undef, na, nb)
 
-        ws_key = gensym(:sinkhorn_ws)
-
         npairs = na * nb
-        Threads.@threads :greedy for k in 1:npairs
-            ws = get!(task_local_storage(), ws_key) do
-                SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
-                                     epsilon=epsilon, max_iter=max_iter_sinkhorn,
-                                     tol=sinkhorn_tol, annealing=annealing)
-            end::SinkhornWorkspace{V}
-
+        make_ws_cross() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
+                                               epsilon=epsilon, max_iter=max_iter_sinkhorn,
+                                               tol=sinkhorn_tol, annealing=annealing)
+        work_cross!(ws, k) = begin
             i = (k - 1) ÷ nb + 1
             j = mod1(k, nb)
             w0, c0 = tuples0[i]
@@ -504,6 +543,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
             D[i, j] = val
         end
+        _pairwise_parallel!(npairs, make_ws_cross, work_cross!)
         return D
     end
 end

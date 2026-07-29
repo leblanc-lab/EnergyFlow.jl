@@ -92,4 +92,35 @@ end
     @test Float64(val_ot32) ≈ 0.0 atol=1e-6
 end
 
+@testset "EMDSolver pairwise matrix reconstruction" begin
+    test_log("  pairwise reconstruction: exercising symmetric=false branch")
+
+    events = [
+        (Float64[1.0], reshape(Float64[0.0], 1, 1)),
+        (Float64[1.0], reshape(Float64[1.0], 1, 1)),
+        (Float64[1.0], reshape(Float64[3.0], 1, 1)),
+    ]
+
+    # Trigger the internal branch that reconstructs a full symmetric matrix from flat results
+    D = EnergyFlow._pairwise_emd_self(Float64, events;
+                                      beta=1.0, R=1.0, norm=true,
+                                      max_iter=10_000, symmetric=false)
+
+    test_log("  pairwise reconstruction: matrix size=$(size(D))")
+    test_log("  pairwise reconstruction: D[1,2]=$(D[1,2]) D[1,3]=$(D[1,3]) D[2,3]=$(D[2,3])")
+
+    @test size(D) == (3, 3)
+    @test D[1, 1] ≈ 0.0 atol=1e-12
+    @test D[2, 2] ≈ 0.0 atol=1e-12
+    @test D[3, 3] ≈ 0.0 atol=1e-12
+    @test D[1, 2] ≈ D[2, 1] atol=1e-12
+    @test D[1, 3] ≈ D[3, 1] atol=1e-12
+    @test D[2, 3] ≈ D[3, 2] atol=1e-12
+
+    # Expected EMDs for single-particle events in 1D are absolute coordinate differences
+    @test D[1, 2] ≈ 1.0 atol=1e-12
+    @test D[1, 3] ≈ 3.0 atol=1e-12
+    @test D[2, 3] ≈ 2.0 atol=1e-12
+end
+
 test_log("\nAll EMDSolver tests completed!")

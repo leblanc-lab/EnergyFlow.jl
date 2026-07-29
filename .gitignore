@@ -4,6 +4,7 @@ Manifest.toml
 /.vscode
 __pycache__
 *.pyc
+/benchmark/.venv*
 /benchmark/result
 *.cov
 *.info

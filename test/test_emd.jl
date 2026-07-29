@@ -69,15 +69,39 @@ test_log("="^70)
         @test cross_ns[1, 1] ≈ 0.0 atol=1e-10
         @test cross_ns[2, 2] ≈ 1.0 atol=1e-10
 
+        cross_ns32 = emds(events, [ev0, ev2]; backend=:ns32, R=1.0, beta=1.0, norm=true)
+        cross_ot32 = emds(events, [ev0, ev2]; backend=:ot32, R=1.0, beta=1.0, norm=true)
+        test_log("  cross ns32 = $cross_ns32")
+        test_log("  cross ot32 = $cross_ot32")
+        @test size(cross_ns32) == (3, 2)
+        @test size(cross_ot32) == (3, 2)
+
+        cross_sink = emds(events, [ev0, ev2]; backend=:sinkhorn, R=1.0, beta=1.0, norm=true)
+        test_log("  cross sinkhorn = $cross_sink")
+        @test size(cross_sink) == (3, 2)
+        @test all(isfinite, cross_sink)
+
         results64 = zeros(Float64, 3)
         emds!(results64, events; backend=:ns64, R=1.0, beta=1.0, norm=true)
         test_log("  emds! ns64 = $results64")
         @test all(isapprox.(results64, self_ns; atol=1e-10))
 
+        results64_ot = zeros(Float64, 3)
+        emds!(results64_ot, events; backend=:ot64, R=1.0, beta=1.0, norm=true)
+        test_log("  emds! ot64 = $results64_ot")
+        @test all(isapprox.(results64_ot, self_ot; atol=1e-10))
+
         results32 = zeros(Float32, 3)
         emds!(results32, events; backend=:ns32, R=1.0, beta=1.0, norm=true)
         test_log("  emds! ns32 = $results32")
         @test all(isapprox.(Float64.(results32), Float64.(self_ns); atol=1e-5))
+
+        self_ot32 = emds(events; backend=:ot32, R=1.0, beta=1.0, norm=true)
+        results32_ot = zeros(Float32, 3)
+        emds!(results32_ot, events; backend=:ot32, R=1.0, beta=1.0, norm=true)
+        test_log("  pairwise ot32 = $self_ot32")
+        test_log("  emds! ot32 = $results32_ot")
+        @test all(isapprox.(Float64.(results32_ot), Float64.(self_ot32); atol=1e-5))
 
         sink_val = emd(ev0, ev1; backend=:sinkhorn, R=1.0, beta=1.0, norm=true)
         test_log("  sinkhorn = $sink_val")
@@ -93,6 +117,7 @@ test_log("="^70)
         @test_throws ErrorException emd!(ws64, ev0, ev1; backend=:bogus)
         @test_throws ErrorException emds(events; backend=:bogus)
         @test_throws ErrorException emds!(results64, events; backend=:sinkhorn)
+        @test_throws ErrorException emds!(results64, events; backend=:bogus)
     finally
         set_backend(original_backend)
     end
