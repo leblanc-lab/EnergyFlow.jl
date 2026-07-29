@@ -3,15 +3,25 @@ name: EMD Benchmarks
 on:
   pull_request_target:
     branches: [main]
+    types: [labeled, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   benchmark:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'benchmark'))
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Authenticate git for private-repo fetches
         run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
