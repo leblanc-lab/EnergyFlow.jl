@@ -46,6 +46,14 @@ test_log("="^70)
         @test ns32_inplace isa Float32
         @test ot32_inplace isa Float32
 
+        metric = CustomMetric((a, b) -> sqrt(sum((a .- b) .^ 2)))
+        metric_val = emd!(ws64, ev0, ev1; backend=:ns64, metric=metric)
+        @test metric_val ≈ emd(ev0, ev1; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric)
+
+        results_metric = zeros(Float64, 3)
+        emds!(results_metric, events; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric)
+        @test all(isapprox.(results_metric, emds(events; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric); atol=1e-10))
+
         self_ns = emds(events; backend=:ns64, R=1.0, beta=1.0, norm=true)
         self_ot = emds(events; backend=:ot64, R=1.0, beta=1.0, norm=true)
         test_log("  pairwise ns64 = $self_ns")

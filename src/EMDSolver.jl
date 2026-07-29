@@ -198,15 +198,19 @@ Compute EMD using the Network Simplex Float64 backend with a pre-allocated
 function emd_ns64!(ws::EMDWorkspace{V},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
-                   n_iter_max::Int = 100_000) where V
+                   n_iter_max::Int = 100_000,
+                   metric::GroundMetric = ws.metric) where V
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
 
+    old_metric = ws.metric
+    ws.metric = metric
     val, _status = _emd_raw!(ws,
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max)
+    ws.metric = old_metric
     return val
 end
 
@@ -257,15 +261,19 @@ for improved performance on unbalanced transport problems.
 function emd_ot64!(ws::EMDWorkspace{V},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
-                   n_iter_max::Int = 100_000) where V
+                   n_iter_max::Int = 100_000,
+                   metric::GroundMetric = ws.metric) where V
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
 
+    old_metric = ws.metric
+    ws.metric = metric
     val, _status = _emd_raw!(ws,
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true)
+    ws.metric = old_metric
     return val
 end
 
@@ -312,12 +320,16 @@ Compute EMD using the Network Simplex Float32 backend with a pre-allocated
 function emd_ns32!(ws::EMDWorkspace{Float32},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
-                   n_iter_max::Int = 100_000)
+                   n_iter_max::Int = 100_000,
+                   metric::GroundMetric = ws.metric)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
 
+    old_metric = ws.metric
+    ws.metric = metric
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
+    ws.metric = old_metric
     return val
 end
 
@@ -355,12 +367,16 @@ Compute EMD using the OT-style Float32 backend (arc mixing enabled).
 function emd_ot32!(ws::EMDWorkspace{Float32},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
-                   n_iter_max::Int = 100_000)
+                   n_iter_max::Int = 100_000,
+                   metric::GroundMetric = ws.metric)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
 
+    old_metric = ws.metric
+    ws.metric = metric
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true)
+    ws.metric = old_metric
     return val
 end
 
