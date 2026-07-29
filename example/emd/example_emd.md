@@ -99,3 +99,17 @@ val = emd!(ws, events[1], events[2])
 ```
 
 This avoids per-call allocations and is the fastest path for large jobs.
+
+## 5. Transport plan visualisation
+
+`emd(...; return_flow=true)` also returns the optimal transport plan matrix.
+That makes it easy to draw a red/blue particle-pair plot like the one shown on
+[EnergyFlow](https://energyflow.network/): blue source particles, red target
+particles, and lines whose thickness follows the transported weight.
+
+```julia
+val, plan = emd(events[1], events[2]; R=1.0, beta=1.0, norm=true, return_flow=true)
+```
+
+The runnable script in this folder now saves a simple visualisation as
+`emd_transport_plan.png` using `Plots.jl`.

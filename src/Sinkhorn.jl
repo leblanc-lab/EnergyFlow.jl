@@ -214,6 +214,15 @@ function _sinkhorn_log_domain!(ws::SinkhornWorkspace{V},
     return total, converged ? :optimal : :max_iter
 end
 
+function _sinkhorn_transport_plan(ws::SinkhornWorkspace{V}, n0::Int, n1::Int) where V
+    plan = Matrix{V}(undef, n0, n1)
+    @inbounds for j in 1:n1, i in 1:n0
+        log_P = ws.log_u[i] + ws.log_K[i,j] + ws.log_v[j]
+        plan[i, j] = log_P > V(-500) ? exp(log_P) : zero(V)
+    end
+    return plan
+end
+
 # ─────────────────────────────────────────────────────────────────────
 # Sinkhorn with ε-annealing
 # ─────────────────────────────────────────────────────────────────────
@@ -409,13 +418,14 @@ Returns the regularised transport cost (same precision as the workspace).
 """
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
-                       gdim::Union{Nothing,Int} = nothing) where V
+                       gdim::Union{Nothing,Int} = nothing,
+                       return_flow::Bool = false) where V
 
     w0, c0 = _unpack_event(V, ev0, gdim)
     w1, c1 = _unpack_event(V, ev1, gdim)
 
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, length(w0), length(w1))) : val
 end
 
 """
@@ -447,7 +457,8 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                       max_iter_sinkhorn::Int = 5000,
                       sinkhorn_tol::Real = 1e-9,
                       annealing::Bool = true,
-                      n_iter_max::Int = 100_000)  # accepted but unused (API compat)
+                      n_iter_max::Int = 100_000,  # accepted but unused (API compat)
+                      return_flow::Bool = false)
 
     V = Float64
     w0, c0 = _unpack_event(V, ev0, gdim)
@@ -460,7 +471,7 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                                tol=sinkhorn_tol, annealing=annealing)
 
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0, n1)) : val
 end
 
 # ─────────────────────────────────────────────────────────────────────
