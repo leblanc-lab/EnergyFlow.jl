@@ -11,7 +11,7 @@ using EnergyFlow
 using Printf
 using Statistics
 
-include("isotropy_defs.jl")
+ring_event(ev) = ev[:, [1, 3]]
 
 const events = load_hepmc3_events(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100)
 const ymax = 4.0

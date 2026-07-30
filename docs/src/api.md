@@ -47,6 +47,24 @@ SinkhornWorkspace
 
 ```@docs
 load_hepmc3_events
+load_hepmc3_momenta
+```
+
+## Event Isotropy
+
+```@docs
+ring_reference
+cylinder_reference
+sphere_reference
+healpix_pix2vec_ring
+ring_cos_metric
+ring_phi_metric
+cylinder_metric
+sphere_cos_metric
+sphere_angular_metric
+select_events
+select_sphere_events
+event_isotropy
 ```
 
 ## Backend-specific functions

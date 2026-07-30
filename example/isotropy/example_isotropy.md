@@ -29,41 +29,26 @@ ATLAS measured the ring/cylinder observables in multijet events ([arXiv:2305.169
 
 ## Definitions
 
-The conventions follow the reference POT implementation ([caricesarotti/event_isotropy](https://github.com/caricesarotti/event_isotropy)). Each ground distance bakes its normalization into the metric, so every EMD is evaluated with `R=1`, `beta=1`, `norm=true`.
-
-**Reference events**
-
-| geometry | construction | weights |
-|----------|--------------|---------|
-| ring `N` | `φ_j = 2π(j − ½)/N` | equal |
-| cylinder `n_φ × n_y` | `n_φ` slices in φ × `floor(ymax·n_φ/π)` slices in `y`, over `\|y\| ≤ ymax` | equal |
-| sphere `nVal` | `12·(2^nVal)²` HEALPix pixel centers (RING scheme) | equal |
-
-**Ground distances**
-
-| observable | distance |
-|------------|----------|
-| ring ("cos" measure) | `(π/(π−2)) · (1 − cos Δφ)` |
-| cylinder (β=2 measure) | `12/(π² + 16·ymax²) · (Δy² + Δφ²)` |
-| sphere ("cos" measure) | `2 · (1 − cos θ)` on 3-momentum directions |
-
-with `Δφ` wrapped to `[0, π]` and `θ` the opening angle. These map directly onto `CustomMetric`:
+The conventions follow the reference POT implementation ([caricesarotti/event_isotropy](https://github.com/caricesarotti/event_isotropy)). EnergyFlow now exports the canonical helpers directly, so the example scripts use the package API instead of reimplementing the geometry:
 
 ```julia
-wrap_dphi(a, b) = (d = abs(a - b); π - abs(mod(d, 2π) - π))
-
-ring_cos_metric() =
-    CustomMetric((p, q) -> (π / (π - 2)) * (1 - cos(wrap_dphi(p[1], q[1]))))
-
-event_isotropy(event, ref, metric) =
-    emd(event, ref; R=1.0, beta=1.0, norm=true, metric=metric)
+ring_reference(128)
+cylinder_reference(16, 4.0)
+sphere_reference(2)
+ring_cos_metric()
+cylinder_metric(4.0)
+sphere_cos_metric()
+event_isotropy(event, ref, metric)
+event_isotropy(event; geometry=:ring, n=128)
 ```
+
+Each ground distance bakes its normalization into the metric, so every EMD is evaluated with `R=1`, `beta=1`, `norm=true`.
 
 Ring events are `M×2` matrices `[pT, φ]`; cylinder events are the usual `M×3` `[pT, y, φ]`; sphere events are `M×4` matrices `[E, px, py, pz]`.
 
 ## Spherical isotropy (lepton colliders)
 
-For e⁺e⁻ events the reference is a uniform sphere of radiation, built from the centers of the `12·nside²` HEALPix pixels (`nside = 2^nVal`) — the same tiling used by the reference [`event_isotropy`](https://github.com/caricesarotti/event_isotropy) package via `astropy_healpix`. The example reproduces `astropy_healpix.pix2vec` in pure Julia (agrees to ~1e-11), so no HEALPix dependency is needed:
+For e⁺e⁻ events the reference is a uniform sphere of radiation, built from the centers of the `12·nside²` HEALPix pixels (`nside = 2^nVal`) — the same tiling used by the reference [`event_isotropy`](https://github.com/caricesarotti/event_isotropy) package via `astropy_healpix`. The HEALPix construction now lives in [`healpix_pix2vec_ring`](@ref) and [`sphere_reference`](@ref), so no extra dependency is needed:
 
 ```julia
 sph192 = sphere_reference(2)          # 192-point sphere (nVal = 2; nVal = 1 → 48)
