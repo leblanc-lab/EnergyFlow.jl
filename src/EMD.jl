@@ -134,6 +134,9 @@ function emd!(ws::SinkhornWorkspace,
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
               metric::Union{Nothing,GroundMetric} = nothing)
+    if metric !== nothing && !(metric isa EuclideanMetric)
+        error("sinkhorn backend currently supports only EuclideanMetric().")
+    end
     return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim)
 end
 
@@ -207,6 +210,9 @@ function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     elseif backend === :ot32
         return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric)
     elseif backend === :sinkhorn
+        if metric isa GroundMetric && !(metric isa EuclideanMetric)
+            error("sinkhorn backend currently supports only EuclideanMetric().")
+        end
         return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
