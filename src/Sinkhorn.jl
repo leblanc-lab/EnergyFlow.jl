@@ -223,6 +223,23 @@ function _sinkhorn_transport_plan(ws::SinkhornWorkspace{V}, n0::Int, n1::Int) wh
     return plan
 end
 
+function _sinkhorn_plan_dims(ws::SinkhornWorkspace{V},
+                             weights0::AbstractVector{V}, weights1::AbstractVector{V}) where V
+    n0_eff = length(weights0)
+    n1_eff = length(weights1)
+
+    if !ws.norm
+        weight_diff = sum(weights1) - sum(weights0)
+        if weight_diff > sqrt(eps(V))
+            n0_eff += 1
+        elseif weight_diff < -sqrt(eps(V))
+            n1_eff += 1
+        end
+    end
+
+    return n0_eff, n1_eff
+end
+
 # ─────────────────────────────────────────────────────────────────────
 # Sinkhorn with ε-annealing
 # ─────────────────────────────────────────────────────────────────────
@@ -424,8 +441,9 @@ function emd_sinkhorn!(ws::SinkhornWorkspace{V},
     w0, c0 = _unpack_event(V, ev0, gdim)
     w1, c1 = _unpack_event(V, ev1, gdim)
 
+    n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return return_flow ? (val, _sinkhorn_transport_plan(ws, length(w0), length(w1))) : val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
 """
@@ -470,8 +488,9 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                                epsilon=epsilon, max_iter=max_iter_sinkhorn,
                                tol=sinkhorn_tol, annealing=annealing)
 
+    n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0, n1)) : val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
 # ─────────────────────────────────────────────────────────────────────

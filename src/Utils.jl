@@ -174,8 +174,11 @@ end
     _transport_plan(ns::NetworkSimplexSolver; arc_mixing=false) -> Matrix
 
 Reconstruct the optimal transport plan from a solved network-simplex workspace.
-The returned matrix has size `ns.n0 × ns.n1` and contains only transport
-between the real particles, not the artificial root arcs.
+The returned matrix has size `ns.n0 × ns.n1`, where `ns.n0`/`ns.n1` are the
+effective solver dimensions. For `norm=true` this is just the real-particle
+transport block; for `norm=false` it includes any fictitious source/target row
+or column introduced by the solver. The artificial root arcs are never
+included.
 """
 function _transport_plan(ns::NetworkSimplexSolver{V}; arc_mixing::Bool = false) where V
     plan = Matrix{V}(undef, ns.n0, ns.n1)

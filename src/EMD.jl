@@ -162,9 +162,9 @@ pre-allocated workspace.
   ground distance for a true metric).
 - `beta`: exponent applied to the scaled ground distance (angular exponent).
 - `norm`: if `true`, normalize each event's weights to sum to 1 before
-  solving. If `false` (default) and the total weights differ, the weight
-  difference is handled by a fictitious particle at unit cost, matching the
-  Python EnergyFlow convention.
+    solving. If `false` (default) and the total weights differ, the weight
+    difference is handled by a fictitious particle at unit cost, matching the
+    Python EnergyFlow convention.
 - `gdim`: number of coordinate dimensions to use (`nothing` = all columns
   after the first).
 - `n_iter_max`: maximum solver iterations.
@@ -174,7 +174,9 @@ pre-allocated workspace.
 
 # Returns
 The EMD value by default. If `return_flow=true`, returns `(emd_value,
-transport_plan)`.
+transport_plan)`. For `norm=false`, the returned plan includes any fictitious
+source/target row or column introduced by the solver so its marginals match
+the balanced problem that was actually solved.
 
 # Example
 ```julia
