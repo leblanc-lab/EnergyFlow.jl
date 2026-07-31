@@ -46,6 +46,15 @@ test_log("="^70)
         @test ns32_inplace isa Float32
         @test ot32_inplace isa Float32
 
+        metric = CustomMetric((a, b) -> 2 * sqrt(sum((a .- b) .^ 2)))
+        metric_val = emd!(ws64, ev0, ev1; backend=:ns64, metric=metric)
+        @test metric_val ≈ emd(ev0, ev1; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric)
+        @test metric_val ≈ 2.0 atol=1e-10
+
+        results_metric = zeros(Float64, 3)
+        emds!(results_metric, events; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric)
+        @test all(isapprox.(results_metric, emds(events; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric); atol=1e-10))
+
         self_ns = emds(events; backend=:ns64, R=1.0, beta=1.0, norm=true)
         self_ot = emds(events; backend=:ot64, R=1.0, beta=1.0, norm=true)
         test_log("  pairwise ns64 = $self_ns")
@@ -99,11 +108,13 @@ test_log("="^70)
         test_log("  sinkhorn = $sink_val")
         @test isfinite(sink_val)
         @test sink_val ≥ 0.0
+        @test_throws ErrorException emd(ev0, ev1; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, metric=metric)
 
         sink_ws = SinkhornWorkspace(2, 2; beta=1.0, R=1.0, norm=true, epsilon=0.01)
         sink_inplace = emd!(sink_ws, ev0, ev1)
         test_log("  sinkhorn emd! = $sink_inplace")
         @test sink_inplace isa Float64
+        @test_throws ErrorException emd!(sink_ws, ev0, ev1; metric=metric)
 
         @test_throws ErrorException emd(ev0, ev1; backend=:bogus)
         @test_throws ErrorException emd!(ws64, ev0, ev1; backend=:bogus)
