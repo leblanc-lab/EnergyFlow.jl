@@ -4,25 +4,30 @@
     Event isotropy helpers for EnergyFlow.jl.
 
     Provides reference geometries, normalized ground metrics, event selection
-    helpers, and convenience front-door wrappers for the isotropy observable.
+    helpers, and convenience wrappers for the isotropy observable.
 =#
 
 wrap_dphi(a, b) = (d = abs(a - b); π - abs(mod(d, 2π) - π))
 
-ring_event(ev) = ev[:, [1, 3]]
+_ring_event(ev) = ev[:, [1, 3]]
 
-function sphere_event(ev)
+function _sphere_event(ev)
     mask = vec(sum(abs2, @view(ev[:, 2:4]); dims=2)) .> 0
     return ev[mask, :]
 end
 
-function _frontdoor_event_view(event::AbstractMatrix{<:Real}, geometry::Symbol)
+function _isotropy_event_view(event::AbstractMatrix{<:Real}, geometry::Symbol)
     if geometry === :ring
-        return size(event, 2) == 2 ? event : ring_event(event)
+        ncols = size(event, 2)
+        ncols == 2 && return event
+        ncols == 3 || error("Ring isotropy events must have 2 or 3 columns, got $ncols")
+        return _ring_event(event)
     elseif geometry === :cylinder
+        size(event, 2) == 3 || error("Cylinder isotropy events must have 3 columns, got $(size(event, 2))")
         return event
     elseif geometry === :sphere
-        return sphere_event(event)
+        size(event, 2) == 4 || error("Sphere isotropy events must have 4 columns, got $(size(event, 2))")
+        return _sphere_event(event)
     else
         error("Unknown isotropy geometry :$geometry. Available: :ring, :cylinder, :sphere")
     end
@@ -163,16 +168,19 @@ sphere_angular_metric() = CustomMetric((p, q) -> acos(_cosang(p, q)))
 
 
 """
-    select_events(events, ymax; min_particles=2) -> Vector{Matrix}
+    select_rapidity(events, ymax; min_particles=2) -> Vector{Matrix}
 
 Physics preselection for hadron-collider isotropy: keep particles with
 `|y| ≤ ymax` and drop events with fewer than `min_particles` accepted
 particles. This is a deliberate acceptance choice and should be applied
 consistently when comparing implementations.
 """
-select_events(events, ymax::Real; min_particles::Int=2) =
+select_rapidity(events, ymax::Real; min_particles::Int=2) =
     [ev[abs.(ev[:, 2]) .<= ymax, :] for ev in events
      if count(abs.(ev[:, 2]) .<= ymax) >= min_particles]
+
+select_events(events, ymax::Real; min_particles::Int=2) =
+    select_rapidity(events, ymax; min_particles=min_particles)
 
 """
     select_sphere_events(events; min_particles=2) -> Vector{Matrix}
@@ -182,44 +190,7 @@ any event with fewer than `min_particles` remaining. This is the acceptance
 choice for the lepton-collider version of the observable.
 """
 select_sphere_events(events; min_particles::Int=2) =
-    [se for ev in events for se in (sphere_event(ev),) if size(se, 1) >= min_particles]
-
-"""
-    load_hepmc3_momenta(filepath; maxevents=-1, status=1) -> Vector{Matrix{Float64}}
-
-Load events from a HepMC3 ASCII file as `M×4` matrices with columns
-`[E, px, py, pz]`, suitable for spherical isotropy.
-"""
-function load_hepmc3_momenta(filepath::String; maxevents::Int=-1, status::Int=1)
-    events = Matrix{Float64}[]
-    raw = NTuple{4,Float64}[]
-    n_ev = 0
-    open(filepath) do f
-        for line in eachline(f)
-            occursin(r"HepMC::.*-END_EVENT_LISTING", line) && break
-            c = isempty(line) ? '\0' : line[1]
-            if c == 'E' && length(line) > 1 && line[2] == ' '
-                if !isempty(raw)
-                    push!(events, reduce(vcat, (reshape(collect(r), 1, 4) for r in raw)))
-                    n_ev += 1
-                end
-                empty!(raw)
-                (maxevents >= 0 && n_ev >= maxevents) && break
-            elseif c == 'P' && length(line) > 1 && line[2] == ' '
-                tok = split(line)
-                length(tok) < 10 && continue
-                parse(Int, tok[10]) == status || continue
-                px = parse(Float64, tok[5]); py = parse(Float64, tok[6])
-                pz = parse(Float64, tok[7]); e = parse(Float64, tok[8])
-                push!(raw, (e, px, py, pz))
-            end
-        end
-        if !isempty(raw) && (maxevents < 0 || n_ev < maxevents)
-            push!(events, reduce(vcat, (reshape(collect(r), 1, 4) for r in raw)))
-        end
-    end
-    return events
-end
+    [se for ev in events for se in (_sphere_event(ev),) if size(se, 1) >= min_particles]
 
 function _recoil_correct_ring(event::AbstractMatrix{<:Real})
     qx = sum(event[:, 1] .* cos.(event[:, 2]))
@@ -294,6 +265,7 @@ Supported geometries:
 - `:sphere`   — lepton-collider sphere via HEALPix (`nval`, so `nside = 2^nval`)
 
 For `:ring`, 3-column hadron-collider events are projected to `[pT, φ]`.
+For `:cylinder`, particles with `|y| > ymax` are dropped before evaluation.
 For `:sphere`, zero-momentum particles are dropped before evaluation.
 Set `recoil=true` to append a balancing pseudo-particle before the EMD is
 computed, which is useful when the input event has residual net momentum.
@@ -308,17 +280,19 @@ function event_isotropy(event::AbstractMatrix{<:Real};
                         n_iter_max::Int=100_000,
                         recoil::Bool=false)
     if geometry === :ring
-        ev = _frontdoor_event_view(event, :ring)
+        ev = _isotropy_event_view(event, :ring)
         ref = ring_reference(n)
         return event_isotropy(_maybe_recoil_correct(ev, ref, recoil), ref, ring_cos_metric();
                               backend=backend, n_iter_max=n_iter_max)
     elseif geometry === :cylinder
-        ev = _frontdoor_event_view(event, :cylinder)
+        ev = _isotropy_event_view(event, :cylinder)
+        ev = ev[abs.(ev[:, 2]) .<= ymax, :]
+        size(ev, 1) >= 2 || error("Cylinder isotropy requires at least 2 particles after |y| ≤ $ymax selection")
         ref = cylinder_reference(nphi, ymax)
         return event_isotropy(_maybe_recoil_correct(ev, ref, recoil), ref, cylinder_metric(ymax);
                               backend=backend, n_iter_max=n_iter_max)
     elseif geometry === :sphere
-        ev = _frontdoor_event_view(event, :sphere)
+        ev = _isotropy_event_view(event, :sphere)
         ref = sphere_reference(nval)
         return event_isotropy(_maybe_recoil_correct(ev, ref, recoil), ref, sphere_cos_metric();
                               backend=backend, n_iter_max=n_iter_max)

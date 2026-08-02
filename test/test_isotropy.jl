@@ -22,6 +22,7 @@ using EnergyFlow
     end
 
     @testset "ground metrics" begin
+        @test emd([1.0 0.0], [1.0 π]; R=1.0, beta=1.0, norm=true, metric=ring_cos_metric()) ≈ (2π / (π - 2)) atol=1e-10
         @test emd([1.0 0.0], [1.0 π]; R=1.0, beta=1.0, norm=true, metric=ring_phi_metric()) ≈ 4.0 atol=1e-10
         @test emd([1.0 0.0 0.0], [1.0 1.0 0.0]; R=1.0, beta=1.0, norm=true, metric=cylinder_metric(1.0)) ≈ (12 / (π^2 + 16)) atol=1e-10
         @test emd([1.0 1.0 0.0 0.0], [1.0 0.0 1.0 0.0]; R=1.0, beta=1.0, norm=true, metric=sphere_cos_metric()) ≈ 2.0 atol=1e-10
@@ -33,7 +34,7 @@ using EnergyFlow
             [1.0 0.1 0.0; 1.0 -0.2 0.1; 1.0 2.5 -0.3],
             [1.0 3.0 0.0],
         ]
-        selected = select_events(events, 1.0)
+        selected = select_rapidity(events, 1.0)
         @test length(selected) == 1
         @test size(selected[1], 1) == 2
 
@@ -46,7 +47,7 @@ using EnergyFlow
         @test size(sphere_selected[1], 1) == 2
     end
 
-    @testset "front door" begin
+    @testset "convenience wrapper" begin
         ring = ring_reference(4)
         ring_event = hcat(ring[:, 1], zeros(4), ring[:, 2])
         @test event_isotropy(ring_event; geometry=:ring, n=4) ≈ 0.0 atol=1e-10

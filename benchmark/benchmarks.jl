@@ -1,8 +1,6 @@
 using BenchmarkTools
 using EnergyFlow
 
-ring_event(ev) = ev[:, [1, 3]]
-
 const events = load_hepmc3_events(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100)
 
 const SUITE = BenchmarkGroup()
@@ -29,12 +27,12 @@ end
 # sphere (lepton collider) reference.
 let
     ymax = 4.0
-    selected = select_events(events, ymax)
+    selected = select_rapidity(events, ymax)
     sphere_selected = select_sphere_events(
         load_hepmc3_momenta(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100))
     setups = [
-        ("ring128",   [ring_event(ev) for ev in selected], ring_reference(128),          ring_cos_metric()),
-        ("ring2",     [ring_event(ev) for ev in selected], ring_reference(2),            ring_cos_metric()),
+        ("ring128",   [EnergyFlow._ring_event(ev) for ev in selected], ring_reference(128),          ring_cos_metric()),
+        ("ring2",     [EnergyFlow._ring_event(ev) for ev in selected], ring_reference(2),            ring_cos_metric()),
         ("cyl16",     selected,                            cylinder_reference(16, ymax), cylinder_metric(ymax)),
         ("sphere192", sphere_selected,                     sphere_reference(2),          sphere_cos_metric()),
     ]
