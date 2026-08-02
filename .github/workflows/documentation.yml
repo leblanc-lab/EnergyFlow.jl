@@ -4,12 +4,24 @@ on:
   push:
     branches: [main]
     tags: ["*"]
+  # Only rebuild docs on PRs that can actually change them.
   pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "Project.toml"
+      - ".github/workflows/documentation.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: write
       contents: write

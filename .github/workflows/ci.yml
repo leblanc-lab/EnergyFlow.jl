@@ -3,8 +3,23 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - "CITATION.cff"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - "CITATION.cff"
+
+# Supersede in-flight runs when a PR is pushed to again; keep main runs intact.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -12,14 +27,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         julia-version: ["lts", "1", "pre"]
         include:
           - julia-version: "pre"
             allow-failure: true
           - julia-version: "lts"
             allow-failure: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     continue-on-error: ${{ matrix['allow-failure'] || false }}
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +57,11 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
       - name: Process coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.julia-version == '1'
+        if: matrix.julia-version == '1'
         uses: julia-actions/julia-processcoverage@v1
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.julia-version == '1'
+        if: matrix.julia-version == '1'
         uses: codecov/codecov-action@v5
         with:
           files: lcov.info

@@ -1,0 +1,52 @@
+name: CI (macOS)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [labeled, synchronize, reopened]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - "CITATION.cff"
+  workflow_dispatch:
+    inputs:
+      julia-version:
+        description: "Julia version to test against"
+        required: false
+        default: "1"
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macos:
+    name: test (macos-latest, julia ${{ inputs.julia-version || '1' }})
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'macos')
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ inputs.julia-version || '1' }}
+
+      - uses: julia-actions/cache@v2
+
+      - name: Install dependencies
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run tests
+        env:
+          # Run multithreaded so paper-mode / parallel network-simplex paths run in tests
+          JULIA_NUM_THREADS: "2"
+        # Coverage is collected on the Linux stable job only, so skip it here.
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.test()'
