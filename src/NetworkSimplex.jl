@@ -3,7 +3,8 @@
 
     Reference: 
     1. LEMON's network simplex implementation (https://lemon.cs.elte.hu/trac/lemon)
-    2. Kara, Özturan, Parallel network simplex algorithm for the minimum cost flow, referred as paper in this file
+    2. Kara, Özturan, Parallel network simplex algorithm for the minimum cost flow
+       (the basis for the :parallel_block pivot mode)
 
     - Block-search pivot with epsilon-scaled stopping criterion
     - succ_num-based LCA (not depth-based)
@@ -103,7 +104,7 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     thread_min_rc::Vector{V}     # per-thread minimum reduced cost (padded, stride = _CACHE_PAD)
     thread_best_arc::Vector{Int} # per-thread best arc index      (padded, stride = _CACHE_PAD)
 
-    # ── Persistent worker pool for paper parallel mode ────────────────────────
+    # ── Persistent worker pool for :parallel_block mode ───────────────────────
     # Workers are spawned ONCE per solve (not per block/pivot).
     # Coordination is via two Atomic{Int} counters — zero heap allocation per pivot.
     # Total allocations per solve ≈ (nthreads-1) × allocs_per_@spawn ≈ 50 (constant).
@@ -114,8 +115,8 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     worker_tasks::Vector{Task}        # Task handles for spawned workers (length = nthreads-1)
 
     # ── Pivot mode selection ──────────────────────────────────────────────────
-    pivot_mode::Symbol  # :serial (block-search), :full_parallel, :paper (parallel block)
-    paper_block_size::Int  # block size for :paper mode = max(4*isqrt(arc_num), MIN_BLOCK_SIZE)
+    pivot_mode::Symbol  # :serial (block-search), :full_parallel, :parallel_block
+    parallel_block_size::Int  # block size for :parallel_block = max(4*isqrt(arc_num), MIN_BLOCK_SIZE)
 
     # ── Result ────────────────────────────────────────────────────────────────
     total_cost::V
@@ -135,7 +136,7 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
         max_arc_num     = max_n0 * max_n1
         max_node_num    = max_n0 + max_n1 + 1
         max_all_arc_num = max_arc_num + max_node_num - 1
-        # nt sizes the per-thread scratch and paper-mode worker-pool arrays. It is
+        # nt sizes the per-thread scratch and worker-pool arrays. It is
         # read at RUNTIME here (not constant-folded into precompiled code), so a
         # solver built at runtime always matches the runtime thread count.
         # INVARIANT: never construct a NetworkSimplexSolver/EMDWorkspace at module
@@ -227,8 +228,8 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
     ns.node_num    = n0 + n1 + 1
     ns.arc_num     = n0 * n1
     ns.all_arc_num = ns.arc_num + ns.node_num - 1
-    ns.block_size       = max(Int(BLOCK_SIZE_FACTOR * isqrt(ns.arc_num)), MIN_BLOCK_SIZE)
-    ns.paper_block_size = max(4 * isqrt(ns.arc_num), MIN_BLOCK_SIZE)
+    ns.block_size          = max(Int(BLOCK_SIZE_FACTOR * isqrt(ns.arc_num)), MIN_BLOCK_SIZE)
+    ns.parallel_block_size = max(4 * isqrt(ns.arc_num), MIN_BLOCK_SIZE)
     ns.next_arc    = 1
     ns.in_arc      = 1
 
@@ -280,7 +281,7 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
 
     # ── Arc mixing (OT-style, the backend of ot64 ane 32) ────────────────────────────
     # Permutes bipartite arcs so that each block of size k samples all sources
-    # rather than consecutive arcs from the same source. Dramatically speeds up
+    # rather than consecutive arcs from the same source. Speeds up
     # block-search pivot for degenerate problems (norm=false, imbalanced weights).
     if ns.arc_mixing
         k = ns.block_size
@@ -356,16 +357,15 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
         return ns.status
     end
 
-    # ── Spawn persistent workers for paper parallel mode ──────────────────────
-    # Workers are spawned HERE (once per solve), not once per block or per pivot.
-    # This is what gives constant (~50) allocations per emd! call regardless of n.
+    # ── Spawn persistent workers for :parallel_block mode ─────────────────────
+    # Workers are spawned here, once per solve.
     nworkers = 0
-    if ns.pivot_mode == :paper
+    if ns.pivot_mode == :parallel_block
         nworkers = Threads.nthreads() - 1
         ns.work_epoch[] = 0
         ns.done_count[] = 0
         for w in 1:nworkers
-            ns.worker_tasks[w] = Threads.@spawn _paper_worker_loop!(ns, w + 1)
+            ns.worker_tasks[w] = Threads.@spawn _parallel_block_worker_loop!(ns, w + 1)
         end
     end
 
@@ -373,8 +373,8 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
     n_iter = 0
     ns.n_iters = 0
     ns.n_arc_scans = 0
-    pivot_fn = if ns.pivot_mode == :paper
-        _find_entering_arc_paper!
+    pivot_fn = if ns.pivot_mode == :parallel_block
+        _find_entering_arc_parallel_block!
     elseif ns.arc_num >= ns.parallel_threshold
         _find_entering_arc_parallel!
     else
@@ -412,7 +412,7 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
         end
     end
 
-    # ── Terminate persistent workers (paper mode) ─────────────────────────────
+    # ── Terminate persistent workers (:parallel_block mode) ───────────────────
     if nworkers > 0
         Threads.atomic_xchg!(ns.work_epoch, -1)   # negative epoch = termination signal
         for i in 1:nworkers
@@ -592,7 +592,7 @@ function _find_entering_arc_parallel!(ns::NetworkSimplexSolver{V}) where V
     return false
 end
 
-# ── Paper-style parallel block-search pivot rule ──────────────────────────────
+# ── Parallel block-search pivot rule (:parallel_block) ────────────────────────
 #
 # Kara & Özturan (2022): parallelize ONLY the entering-arc search.
 # Key difference from the @threads-per-block approach: workers are spawned ONCE
@@ -621,7 +621,7 @@ end
 # After scanning, it decrements done_count and returns to spinning.
 # A negative epoch value is the termination signal.
 
-function _paper_worker_loop!(ns::NetworkSimplexSolver{V}, slot::Int) where V
+function _parallel_block_worker_loop!(ns::NetworkSimplexSolver{V}, slot::Int) where V
     last_epoch = 0
     while true
         # Spin-wait for new work (epoch change) or termination (epoch < 0)
@@ -656,11 +656,11 @@ function _paper_worker_loop!(ns::NetworkSimplexSolver{V}, slot::Int) where V
     return nothing
 end
 
-function _find_entering_arc_paper!(ns::NetworkSimplexSolver{V}) where V
+function _find_entering_arc_parallel_block!(ns::NetworkSimplexSolver{V}) where V
     arc_num    = ns.arc_num
     eps_small  = ns.epsilon_small
     nthreads   = Threads.nthreads()
-    block_size = ns.paper_block_size   # 4·√m, pre-computed in network_simplex!
+    block_size = ns.parallel_block_size   # 4·√m, pre-computed in network_simplex!
     nworkers   = nthreads - 1          # number of pre-spawned worker tasks
 
     start         = ns.next_arc   # 1-indexed cyclic position

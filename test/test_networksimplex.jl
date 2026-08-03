@@ -52,16 +52,16 @@ end
     end
 end
 
-@testset "Paper mode lifecycle and max_iter cleanup" begin
+@testset "Parallel-block mode lifecycle and max_iter cleanup" begin
     ns = NetworkSimplexSolver{Float64}(2, 2)
-    ns.pivot_mode = :paper
+    ns.pivot_mode = :parallel_block
     ns.costs[1] = 1.0
     ns.costs[2] = 3.0
     ns.costs[3] = 2.0
     ns.costs[4] = 4.0
 
     status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=0)
-    test_log("  paper mode: nthreads=$(Threads.nthreads()) status=$status work_epoch=$(ns.work_epoch[]) done_count=$(ns.done_count[])")
+    test_log("  parallel_block mode: nthreads=$(Threads.nthreads()) status=$status work_epoch=$(ns.work_epoch[]) done_count=$(ns.done_count[])")
     @test status == :max_iter
     if Threads.nthreads() > 1
         @test ns.work_epoch[] == -1
@@ -84,27 +84,27 @@ end
     @test status == :optimal
 end
 
-@testset "Paper mode optimal cleanup" begin
+@testset "Parallel-block mode optimal cleanup" begin
     ns = NetworkSimplexSolver{Float64}(2, 2)
-    ns.pivot_mode = :paper
+    ns.pivot_mode = :parallel_block
     ns.costs[1] = 1.0
     ns.costs[2] = 3.0
     ns.costs[3] = 2.0
     ns.costs[4] = 4.0
 
     status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
-    test_log("  paper optimal cleanup: nthreads=$(Threads.nthreads()) status=$status work_epoch=$(ns.work_epoch[]) done_count=$(ns.done_count[])")
+    test_log("  parallel_block optimal cleanup: nthreads=$(Threads.nthreads()) status=$status work_epoch=$(ns.work_epoch[]) done_count=$(ns.done_count[])")
     @test status == :optimal
     if Threads.nthreads() > 1
         @test ns.work_epoch[] == -1
     end
 end
 
-@testset "Paper mode unbounded in main loop" begin
+@testset "Parallel-block mode unbounded in main loop" begin
     # Adversarial signed supplies that trigger unboundedness after at least one
     # pivot iteration (n_iters > 0), exercising the delta>=typemax(V) branch.
     ns = NetworkSimplexSolver{Float64}(2, 1)
-    ns.pivot_mode = :paper
+    ns.pivot_mode = :parallel_block
     ns.costs[1] = -3.915877931934624
     ns.costs[2] = -5.6906301598549245
 
@@ -112,7 +112,7 @@ end
     target_weights = [-0.08836431004931167]
 
     status = network_simplex!(ns, source_weights, target_weights; max_iter=200)
-    test_log("  paper unbounded main-loop: status=$status n_iters=$(ns.n_iters) work_epoch=$(ns.work_epoch[])")
+    test_log("  parallel_block unbounded main-loop: status=$status n_iters=$(ns.n_iters) work_epoch=$(ns.work_epoch[])")
 
     @test status == :unbounded
     @test ns.n_iters > 0
@@ -121,7 +121,7 @@ end
     end
 end
 
-@testset "Paper mode worker lifecycle coverage (multithread)" begin
+@testset "Parallel-block mode worker lifecycle coverage (multithread)" begin
     nthreads = Threads.nthreads()
     nworkers = nthreads - 1
 
@@ -131,7 +131,7 @@ end
     else
         # 1) Spawn + max_iter cleanup path
         ns_max = NetworkSimplexSolver{Float64}(2, 2)
-        ns_max.pivot_mode = :paper
+        ns_max.pivot_mode = :parallel_block
         ns_max.costs[1] = 1.0
         ns_max.costs[2] = 3.0
         ns_max.costs[3] = 2.0
@@ -144,7 +144,7 @@ end
 
         # 2) Spawn + unbounded (delta>=typemax) cleanup path
         ns_unb = NetworkSimplexSolver{Float64}(2, 1)
-        ns_unb.pivot_mode = :paper
+        ns_unb.pivot_mode = :parallel_block
         ns_unb.costs[1] = -3.915877931934624
         ns_unb.costs[2] = -5.6906301598549245
         source_weights = [-1.4673454953491227, 1.378981185299811]
@@ -158,7 +158,7 @@ end
 
         # 3) Spawn + normal termination cleanup path
         ns_opt = NetworkSimplexSolver{Float64}(2, 2)
-        ns_opt.pivot_mode = :paper
+        ns_opt.pivot_mode = :parallel_block
         ns_opt.costs[1] = 1.0
         ns_opt.costs[2] = 3.0
         ns_opt.costs[3] = 2.0
@@ -171,7 +171,7 @@ end
     end
 end
 
-@testset "Paper entering-arc false full scan" begin
+@testset "Parallel-block entering-arc false full scan" begin
     # Use a larger setup in multithread mode so worker scanning is substantial,
     # increasing the chance that the done_count spin-wait loop body is executed.
     n0 = Threads.nthreads() > 1 ? 128 : 1
@@ -180,7 +180,7 @@ end
     ns.costs[1:(n0*n1)] .= 1.0
     @test network_simplex!(ns, fill(1.0 / n0, n0), fill(1.0 / n1, n1)) == :optimal
 
-    ns.paper_block_size = 1
+    ns.parallel_block_size = 1
     ns.next_arc = 1
     ns.states[1:ns.arc_num] .= EnergyFlow.STATE_TREE  # guarantees no entering arc
 
@@ -189,12 +189,12 @@ end
         ns.work_epoch[] = 0
         ns.done_count[] = 0
         for w in 1:nworkers
-            ns.worker_tasks[w] = Threads.@spawn EnergyFlow._paper_worker_loop!(ns, w + 1)
+            ns.worker_tasks[w] = Threads.@spawn EnergyFlow._parallel_block_worker_loop!(ns, w + 1)
         end
     end
 
-    found = EnergyFlow._find_entering_arc_paper!(ns)
-    test_log("  paper entering false scan: found=$found next_arc=$(ns.next_arc) nthreads=$(Threads.nthreads())")
+    found = EnergyFlow._find_entering_arc_parallel_block!(ns)
+    test_log("  parallel_block entering false scan: found=$found next_arc=$(ns.next_arc) nthreads=$(Threads.nthreads())")
     @test !found
     @test ns.next_arc == 1
 
@@ -235,7 +235,7 @@ end
     @test ns.in_arc == 1
 end
 
-@testset "Paper worker loop" begin
+@testset "Parallel-block worker loop" begin
     ns = NetworkSimplexSolver{Float64}(1, 1)
     ns.costs[1] = 1.0
     @test network_simplex!(ns, [1.0], [1.0]) == :optimal
@@ -255,10 +255,11 @@ end
     # done_count with only GC.safepoint() (no yield). That is only sound with a
     # real second OS thread: at nthreads=1 the worker and the waiter contend for
     # the single thread and deadlock. Guard it like the sibling testset above
-    # ("Paper mode worker lifecycle coverage" uses `if nworkers > 0`). Paper mode
-    # only ever has workers when nthreads > 1, so nthreads=1 has nothing to cover.
+    # ("Parallel-block mode worker lifecycle coverage" uses `if nworkers > 0`).
+    # :parallel_block only ever has workers when nthreads > 1, so nthreads=1 has
+    # nothing to cover.
     if Threads.nthreads() > 1
-        worker = Threads.@spawn EnergyFlow._paper_worker_loop!(ns, 1)
+        worker = Threads.@spawn EnergyFlow._parallel_block_worker_loop!(ns, 1)
 
         Threads.atomic_add!(ns.done_count, 1)
         Threads.atomic_add!(ns.work_epoch, 1)

@@ -45,7 +45,6 @@ jobs:
 
       - name: Run tests
         env:
-          # Run multithreaded so paper-mode / parallel network-simplex paths run in tests
           JULIA_NUM_THREADS: "2"
         # Coverage is collected on the Linux stable job only, so skip it here.
         run: |
