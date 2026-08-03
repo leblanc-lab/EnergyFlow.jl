@@ -16,7 +16,6 @@ on:
       - "LICENSE"
       - "CITATION.cff"
 
-# Supersede in-flight runs when a PR is pushed to again; keep main runs intact.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -51,7 +50,6 @@ jobs:
 
       - name: Run tests
         env:
-          # Run multithreaded so paper-mode / parallel network-simplex paths run in tests
           JULIA_NUM_THREADS: "2"
         run: |
           julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'

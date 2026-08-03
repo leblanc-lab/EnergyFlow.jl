@@ -3,8 +3,8 @@
 #
 # The package is precompiled with a thread count (usually 1) that need not match
 # the runtime thread count. These tests assert that per-thread solver state is
-# sized by the RUNTIME thread count, which is what makes the paper-mode worker
-# pool and parallel pivot safe when precompiled at 1 thread and run at many.
+# sized by the RUNTIME thread count, which is what makes the :parallel_block
+# worker pool and parallel pivot safe when precompiled at 1 thread and run at many.
 
 @testset "Precompile safety: nthreads sizing" begin
     nt = Threads.nthreads()
