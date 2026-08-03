@@ -115,7 +115,7 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     worker_tasks::Vector{Task}        # Task handles for spawned workers (length = nthreads-1)
 
     # ── Pivot mode selection ──────────────────────────────────────────────────
-    pivot_mode::Symbol  # :serial (block-search), :full_parallel, :parallel_block
+    pivot_mode::Symbol  # :serial (block-search), :parallel_block
     parallel_block_size::Int  # block size for :parallel_block = max(4*isqrt(arc_num), MIN_BLOCK_SIZE)
 
     # ── Result ────────────────────────────────────────────────────────────────
