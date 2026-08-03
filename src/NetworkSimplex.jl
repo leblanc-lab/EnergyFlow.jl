@@ -49,6 +49,15 @@ solve, `total_cost`, `status`, and `n_iters` hold the result and diagnostics.
 
 Based on [LEMON](https://lemon.cs.elte.hu)'s network simplex implementation,
 with optional parallel entering-arc search following Kara & Özturan (2022).
+
+The entering-arc rule is selected by the `pivot_mode` field:
+
+- `:serial` (default) — single-threaded block search.
+- `:parallel_block` — block search with the block split across a persistent
+  worker pool (Kara & Özturan). The mode to use when threads are available.
+- `:full_parallel` — every pivot scans all arcs in parallel and takes the
+  globally most-negative reduced cost. Kept as a simple baseline for
+  benchmarking; it is expected to be slower than `:parallel_block`.
 """
 mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     # ── Dimensions ────────────────────────────────────────────────────────────
@@ -100,7 +109,6 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     arc_mins::Vector{Int}   # length max_n1
 
     # ── Parallel pivot search ─────────────────────────────────────────────────
-    parallel_threshold::Int      # use full-scan parallel when arc_num >= this (typemax = disabled)
     thread_min_rc::Vector{V}     # per-thread minimum reduced cost (padded, stride = _CACHE_PAD)
     thread_best_arc::Vector{Int} # per-thread best arc index      (padded, stride = _CACHE_PAD)
 
@@ -115,7 +123,7 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
     worker_tasks::Vector{Task}        # Task handles for spawned workers (length = nthreads-1)
 
     # ── Pivot mode selection ──────────────────────────────────────────────────
-    pivot_mode::Symbol  # :serial (block-search), :parallel_block
+    pivot_mode::Symbol  # :serial (block-search), :parallel_block, :full_parallel
     parallel_block_size::Int  # block size for :parallel_block = max(4*isqrt(arc_num), MIN_BLOCK_SIZE)
 
     # ── Result ────────────────────────────────────────────────────────────────
@@ -172,8 +180,7 @@ mutable struct NetworkSimplexSolver{V<:AbstractFloat}
             1, 0, 0, 0, 0, 0, zero(V),
             # arc_mins
             Vector{Int}(undef, max(max_n1, 1)),
-            # Parallel scratch — arc entry parallel disabled by default (typemax threshold)
-            typemax(Int),
+            # Parallel scratch — used by :parallel_block and :full_parallel
             Vector{V}(undef, _CACHE_PAD * nt),      # thread_min_rc  (padded)
             Vector{Int}(undef, _CACHE_PAD * nt),    # thread_best_arc (padded)
             # Persistent worker pool fields
@@ -375,10 +382,13 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
     ns.n_arc_scans = 0
     pivot_fn = if ns.pivot_mode == :parallel_block
         _find_entering_arc_parallel_block!
-    elseif ns.arc_num >= ns.parallel_threshold
+    elseif ns.pivot_mode == :full_parallel
         _find_entering_arc_parallel!
-    else
+    elseif ns.pivot_mode == :serial
         _find_entering_arc!
+    else
+        throw(ArgumentError("unknown pivot_mode $(ns.pivot_mode); expected " *
+                            ":serial, :parallel_block or :full_parallel"))
     end
     @inbounds while pivot_fn(ns)
         n_iter += 1
@@ -535,12 +545,20 @@ function _find_entering_arc!(ns::NetworkSimplexSolver{V}) where V
     return false
 end
 
-# ── Parallel full-scan pivot rule ─────────────────────────────────────────────
+# ── Parallel full-scan pivot rule (:full_parallel) ────────────────────────────
 #
-# This is a deprecated alternative on parallelization of the entering-arc search.
+# The simplest parallelization of the entering-arc search: every call scans ALL
+# arcs (no block, no wrap-around state) and takes the globally most-negative
+# reduced cost — i.e. a parallel Dantzig rule.
 #
-# Does a complete scan of all arcs each call (no wrap-around state).
-# Each thread scans its chunk independently; we reduce to global minimum.
+# Kept as a correctness/performance baseline for benchmarking against
+# :parallel_block, which is the mode to use in production: :full_parallel
+# touches every arc on every pivot and forks a fresh task group per pivot, so it
+# is expected to be slower despite doing the same work per arc.
+#
+# `Threads.@threads` here is deliberately :dynamic (the default): the :static
+# schedule cannot be nested inside another threaded region, and this solver is
+# routinely called from worker tasks (e.g. the pairwise EMD drivers).
 
 function _find_entering_arc_parallel!(ns::NetworkSimplexSolver{V}) where V
     arc_num   = ns.arc_num
@@ -548,7 +566,7 @@ function _find_entering_arc_parallel!(ns::NetworkSimplexSolver{V}) where V
     nthreads  = Threads.nthreads()
     chunk_size = max(1, (arc_num + nthreads - 1) ÷ nthreads)
 
-    Threads.@threads :static for t in 1:nthreads
+    Threads.@threads :dynamic for t in 1:nthreads
         chunk_start = (t - 1) * chunk_size + 1
         chunk_end   = min(t * chunk_size, arc_num)
 
@@ -568,6 +586,8 @@ function _find_entering_arc_parallel!(ns::NetworkSimplexSolver{V}) where V
         ns.thread_min_rc[_CACHE_PAD*(t-1)+1]   = local_min
         ns.thread_best_arc[_CACHE_PAD*(t-1)+1] = local_best
     end
+
+    ns.n_arc_scans += arc_num   # diagnostic: this rule always scans every arc
 
     # Reduce: find global minimum across threads
     global_min  = zero(V)

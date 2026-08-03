@@ -1,4 +1,5 @@
 using Test
+using Random
 using EnergyFlow
 include("test_helpers.jl")
 
@@ -70,18 +71,62 @@ end
     end
 end
 
-@testset "Parallel-threshold dispatch (full parallel finder)" begin
-    ns = NetworkSimplexSolver{Float64}(2, 2)
-    ns.pivot_mode = :serial
-    ns.parallel_threshold = 1  # arc_num=4 >= 1 => pick _find_entering_arc_parallel!
-    ns.costs[1] = 1.0
-    ns.costs[2] = 3.0
-    ns.costs[3] = 2.0
-    ns.costs[4] = 4.0
+@testset "Full-parallel mode" begin
+    @testset "dispatch and optimality" begin
+        ns = NetworkSimplexSolver{Float64}(2, 2)
+        ns.pivot_mode = :full_parallel
+        ns.costs[1] = 1.0
+        ns.costs[2] = 3.0
+        ns.costs[3] = 2.0
+        ns.costs[4] = 4.0
 
-    status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
-    test_log("  parallel-threshold dispatch: status=$status n_iters=$(ns.n_iters)")
-    @test status == :optimal
+        status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
+        test_log("  full_parallel dispatch: status=$status n_iters=$(ns.n_iters) n_arc_scans=$(ns.n_arc_scans)")
+        @test status == :optimal
+        @test ns.n_arc_scans >= ns.n_iters * ns.arc_num   # full scan every pivot
+    end
+
+    @testset "agrees with serial on random problems" begin
+        for (n0, n1, seed) in ((8, 8, 1), (12, 7, 2), (5, 19, 3))
+            costs = rand(MersenneTwister(seed), n0 * n1)
+            sw = fill(1.0 / n0, n0)
+            tw = fill(1.0 / n1, n1)
+
+            ns_ser = NetworkSimplexSolver{Float64}(n0, n1)
+            ns_ser.costs[1:(n0*n1)] .= costs
+            st_ser = network_simplex!(ns_ser, sw, tw)
+
+            ns_par = NetworkSimplexSolver{Float64}(n0, n1)
+            ns_par.pivot_mode = :full_parallel
+            ns_par.costs[1:(n0*n1)] .= costs
+            st_par = network_simplex!(ns_par, sw, tw)
+
+            test_log("  full_parallel vs serial ($n0 x $n1): $(ns_ser.total_cost) vs $(ns_par.total_cost)")
+            @test st_ser == :optimal
+            @test st_par == :optimal
+            @test ns_par.total_cost ≈ ns_ser.total_cost rtol=1e-10
+        end
+    end
+
+    @testset "max_iter" begin
+        ns = NetworkSimplexSolver{Float64}(2, 2)
+        ns.pivot_mode = :full_parallel
+        ns.costs[1] = 1.0
+        ns.costs[2] = 3.0
+        ns.costs[3] = 2.0
+        ns.costs[4] = 4.0
+
+        status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=0)
+        test_log("  full_parallel max_iter: status=$status")
+        @test status == :max_iter
+    end
+end
+
+@testset "Unknown pivot mode is rejected" begin
+    ns = NetworkSimplexSolver{Float64}(2, 2)
+    ns.pivot_mode = :not_a_mode
+    ns.costs[1:4] .= 1.0
+    @test_throws ArgumentError network_simplex!(ns, [0.6, 0.4], [0.5, 0.5])
 end
 
 @testset "Parallel-block mode optimal cleanup" begin
