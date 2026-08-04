@@ -62,7 +62,7 @@ ring_phi_metric
 cylinder_metric
 sphere_cos_metric
 sphere_angular_metric
-select_events
+select_rapidity
 select_sphere_events
 event_isotropy
 ```

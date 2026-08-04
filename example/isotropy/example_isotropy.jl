@@ -62,7 +62,7 @@ println("IRing128, uniform toy event:   ",
 
 ymax = 4.0
 raw = load_hepmc3_events(joinpath(@__DIR__, "..", "..", "data", "sk_example_PU.hepmc"); maxevents=20)
-events = select_events(raw, ymax)
+events = select_rapidity(raw, ymax)
 println("\nLoaded $(length(raw)) events, $(length(events)) after |y| ≤ $ymax selection")
 
 # IRing128 — ring reference with 128 points, "1 - cos" ground distance.

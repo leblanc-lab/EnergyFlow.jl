@@ -179,9 +179,6 @@ select_rapidity(events, ymax::Real; min_particles::Int=2) =
     [ev[abs.(ev[:, 2]) .<= ymax, :] for ev in events
      if count(abs.(ev[:, 2]) .<= ymax) >= min_particles]
 
-select_events(events, ymax::Real; min_particles::Int=2) =
-    select_rapidity(events, ymax; min_particles=min_particles)
-
 """
     select_sphere_events(events; min_particles=2) -> Vector{Matrix}
 
