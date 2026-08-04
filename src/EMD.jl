@@ -134,11 +134,12 @@ function emd!(ws::SinkhornWorkspace,
               backend::Symbol = :sinkhorn,
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
-              metric::Union{Nothing,GroundMetric} = nothing)
+              metric::Union{Nothing,GroundMetric} = nothing,
+              return_flow::Bool = false)
     if metric !== nothing && !(metric isa EuclideanMetric)
         error("sinkhorn backend currently supports only EuclideanMetric().")
     end
-    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim)
+    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim, return_flow=return_flow)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
         if metric isa GroundMetric && !(metric isa EuclideanMetric)
             error("sinkhorn backend currently supports only EuclideanMetric().")
         end
-        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max)
+        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, return_flow=return_flow)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end
