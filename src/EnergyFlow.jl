@@ -52,6 +52,9 @@ include("Distances.jl")
 # Event utilities and I/O
 include("Utils.jl")
 
+# Event isotropy observables
+include("Isotropy.jl")
+
 # Pairwise EMD
 include("PairwiseEMD.jl")
 
@@ -60,6 +63,7 @@ include("Sinkhorn.jl")
 
 # HepMC3 event parser
 include("HepMC3.jl")
+using .HepMC3: load_hepmc3_momenta
 
 # Backend dispatch (must be last)
 include("EMD.jl")
@@ -76,7 +80,10 @@ export emd_sinkhorn, emd_sinkhorn!, emds_sinkhorn
 export SinkhornWorkspace
 export emd, emd!, emds, emds!
 export set_backend, get_backend
-export load_hepmc3_events
+export load_hepmc3_events, load_hepmc3_momenta
+export ring_reference, cylinder_reference, sphere_reference, healpix_pix2vec_ring
+export ring_cos_metric, ring_phi_metric, cylinder_metric, sphere_cos_metric, sphere_angular_metric
+export select_rapidity, select_sphere_events, event_isotropy
 
 # PrecompileTools workload (must be last: exercises the fully-defined API).
 include("Precompile.jl")

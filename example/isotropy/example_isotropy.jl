@@ -27,98 +27,21 @@ Pkg.instantiate()
 using EnergyFlow
 using Statistics
 
-# ── Quasi-uniform reference events ──
-
-# Wrapped azimuthal separation in [0, π]
 wrap_dphi(a, b) = (d = abs(a - b); π - abs(mod(d, 2π) - π))
-
-# Ring: n equal-weight particles at φ_j = 2π(j - 1/2)/n. Columns [weight, φ].
-ring_reference(n) = hcat(fill(1.0 / n, n), [2π * (j - 0.5) / n for j in 1:n])
-
-# Cylinder: nphi slices in φ × floor(ymax·nphi/π) slices in y over |y| ≤ ymax.
-# Columns [weight, y, φ].
-function cylinder_reference(nphi, ymax)
-    ny = floor(Int, ymax * nphi / π)
-    phis = [2π * (j - 0.5) / nphi for j in 1:nphi]
-    ys = [-ymax + 2ymax * (i - 0.5) / ny for i in 1:ny]
-    pts = [(y, phi) for phi in phis for y in ys]
-    hcat(fill(1.0 / length(pts), length(pts)), first.(pts), last.(pts))
-end
-
-# ── Isotropy ground distances (as CustomMetrics) ──
-
-# Ring, "cos" measure: (π/(π-2))·(1 - cos Δφ). Events are M×2 [pT, φ].
-ring_cos_metric() = CustomMetric((p, q) -> (π / (π - 2)) * (1 - cos(wrap_dphi(p[1], q[1]))))
-
-# Cylinder, β=2 measure: 12/(π² + 16·ymax²)·(Δy² + Δφ²). Events are M×3 [pT, y, φ].
-function cylinder_metric(ymax)
-    c = 12.0 / (π^2 + 16.0 * ymax^2)
-    CustomMetric((p, q) -> begin
-        dy = p[1] - q[1]
-        dphi = wrap_dphi(p[2], q[2])
-        c * (dy * dy + dphi * dphi)
-    end)
-end
-
-# Sphere (lepton collider): unit vectors at HEALPix pixel centers (RING scheme),
-# reproducing astropy_healpix.pix2vec to ~1e-11. nside must be a power of two.
-function healpix_pix2vec_ring(nside)
-    npix = 12 * nside^2
-    ncap = 2 * nside * (nside - 1)
-    vecs = Vector{NTuple{3,Float64}}(undef, npix)
-    for p in 0:npix-1
-        if p < ncap                                   # north polar cap
-            ph = (p + 1) / 2
-            i = floor(Int, sqrt(ph - sqrt(floor(ph)))) + 1
-            j = p + 1 - 2 * i * (i - 1)
-            z = 1.0 - i^2 / (3.0 * nside^2)
-            phi = (π / (2i)) * (j - 0.5)
-        elseif p < npix - ncap                        # equatorial belt
-            pp = p - ncap
-            i = pp ÷ (4 * nside) + nside
-            j = (pp % (4 * nside)) + 1
-            s = (i - nside + 1) % 2
-            z = 4.0 / 3.0 - 2.0 * i / (3.0 * nside)
-            phi = (π / (2 * nside)) * (j - s / 2.0)
-        else                                          # south polar cap
-            pp = npix - p
-            ph = pp / 2
-            i = floor(Int, sqrt(ph - sqrt(floor(ph)))) + 1
-            j = 4 * i + 1 - (pp - 2 * i * (i - 1))
-            z = -1.0 + i^2 / (3.0 * nside^2)
-            phi = (π / (2i)) * (j - 0.5)
-        end
-        sth = sqrt(1 - z^2)
-        vecs[p+1] = (sth * cos(phi), sth * sin(phi), z)
-    end
-    return vecs
-end
-
-# Sphere reference: equal-weight HEALPix points. Columns [weight, x, y, z].
-# nVal=2 → 192 points, nVal=1 → 48.
-function sphere_reference(nVal)
-    v = healpix_pix2vec_ring(2^nVal)
-    hcat(fill(1.0 / length(v), length(v)), getindex.(v, 1), getindex.(v, 2), getindex.(v, 3))
-end
-
-# Sphere, "cos" measure: 2·(1 − cos θ) between 3-momentum directions.
-# Events are M×4 [E, px, py, pz]; the cos of the opening angle is clamped.
-_cosang(p, q) = clamp((p[1]*q[1] + p[2]*q[2] + p[3]*q[3]) /
-                      (sqrt(p[1]^2 + p[2]^2 + p[3]^2) * sqrt(q[1]^2 + q[2]^2 + q[3]^2)),
-                      -1.0, 1.0)
-sphere_cos_metric() = CustomMetric((p, q) -> 2.0 * (1.0 - _cosang(p, q)))
-
-# Event isotropy = EMD against the reference (normalization is in the metric)
-event_isotropy(event, ref, metric) =
-    emd(event, ref; R=1.0, beta=1.0, norm=true, metric=metric)
 
 ring_event(ev) = ev[:, [1, 3]]   # [pT, φ]
 
-# Acceptance preselection: keep particles with |y| ≤ ymax, drop events with
-# fewer than 2 accepted particles (the EMD is ill-defined for empty events).
-select_events(events, ymax; min_particles=2) =
-    [ev[abs.(ev[:, 2]) .<= ymax, :] for ev in events
-     if count(abs.(ev[:, 2]) .<= ymax) >= min_particles]
+ring2_metric() = CustomMetric((p, q) -> (1 - cos(wrap_dphi(p[1], q[1]))) / (1 - 1 / sqrt(3)))
+
+iring2(ev; nscan=64) = begin
+    rev, m = ring_event(ev), ring2_metric()
+    cost(shift) = event_isotropy(rev, [0.5 shift; 0.5 shift + π], m)
+    shifts = range(0, π; length=nscan + 1)[1:end-1]
+    costs = cost.(shifts)
+    best = shifts[argmin(costs)]
+    fine = range(best - π / nscan, best + π / nscan; length=32)
+    minimum(cost.(fine))
+end
 
 # ── Sanity checks with toy events ──
 
@@ -139,7 +62,7 @@ println("IRing128, uniform toy event:   ",
 
 ymax = 4.0
 raw = load_hepmc3_events(joinpath(@__DIR__, "..", "..", "data", "sk_example_PU.hepmc"); maxevents=20)
-events = select_events(raw, ymax)
+events = select_rapidity(raw, ymax)
 println("\nLoaded $(length(raw)) events, $(length(events)) after |y| ≤ $ymax selection")
 
 # IRing128 — ring reference with 128 points, "1 - cos" ground distance.
@@ -159,19 +82,6 @@ println("ICyl16:        mean $(round(mean(icyl16); digits=4))")
 # Following ATLAS, the ground distance is normalized by 1/(1 − 1/√3) instead
 # of π/(π-2), and the reference orientation is optimized (the 2-point ring is
 # not rotationally symmetric, so we minimize the EMD over the ring phase).
-ring2_metric() = CustomMetric((p, q) -> (1 - cos(wrap_dphi(p[1], q[1]))) / (1 - 1 / sqrt(3)))
-
-function iring2(ev; nscan=64)
-    rev, m = ring_event(ev), ring2_metric()
-    cost(shift) = event_isotropy(rev, [0.5 shift; 0.5 shift + π], m)
-    # coarse scan over the π-periodic phase, then a fine scan around the best
-    shifts = range(0, π; length=nscan + 1)[1:end-1]
-    costs = cost.(shifts)
-    best = shifts[argmin(costs)]
-    fine = range(best - π / nscan, best + π / nscan; length=32)
-    minimum(cost.(fine))
-end
-
 vals = [iring2(ev) for ev in events]
 println("IRing2:        mean $(round(mean(vals); digits=4))")
 

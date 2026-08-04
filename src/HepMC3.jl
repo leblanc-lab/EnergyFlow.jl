@@ -176,4 +176,41 @@ function read_events(f, fin; maxevents = -1, skipevents = 0)
     end
 end
 
+"""
+    load_hepmc3_momenta(filepath; maxevents=-1, status=1) -> Vector{Matrix{Float64}}
+
+Load events from a HepMC3 ASCII file as `M×4` matrices with columns
+`[E, px, py, pz]`, suitable for spherical isotropy.
+"""
+function load_hepmc3_momenta(filepath::String; maxevents::Int=-1, status::Int=1)
+    events = Matrix{Float64}[]
+    raw = NTuple{4,Float64}[]
+    n_ev = 0
+    open(filepath) do f
+        for line in eachline(f)
+            occursin(r"HepMC::.*-END_EVENT_LISTING", line) && break
+            c = isempty(line) ? '\0' : line[1]
+            if c == 'E' && length(line) > 1 && line[2] == ' '
+                if !isempty(raw)
+                    push!(events, reduce(vcat, (reshape(collect(r), 1, 4) for r in raw)))
+                    n_ev += 1
+                end
+                empty!(raw)
+                (maxevents >= 0 && n_ev >= maxevents) && break
+            elseif c == 'P' && length(line) > 1 && line[2] == ' '
+                tok = split(line)
+                length(tok) < 10 && continue
+                parse(Int, tok[10]) == status || continue
+                px = parse(Float64, tok[5]); py = parse(Float64, tok[6])
+                pz = parse(Float64, tok[7]); e = parse(Float64, tok[8])
+                push!(raw, (e, px, py, pz))
+            end
+        end
+        if !isempty(raw) && (maxevents < 0 || n_ev < maxevents)
+            push!(events, reduce(vcat, (reshape(collect(r), 1, 4) for r in raw)))
+        end
+    end
+    return events
+end
+
 end

@@ -11,11 +11,9 @@ using EnergyFlow
 using Printf
 using Statistics
 
-include("isotropy_defs.jl")
-
 const events = load_hepmc3_events(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100)
 const ymax = 4.0
-const selected = select_events(events, ymax)
+const selected = select_rapidity(events, ymax)
 
 # Sphere (lepton-collider) uses full 3-momenta with energy weighting. The
 # forward pp sample here reads as near-pencil (isotropy ≈ 1); it is used as a
@@ -27,8 +25,8 @@ println("Julia $(VERSION), $(Threads.nthreads()) threads")
 println("Loaded $(length(events)) events, $(length(selected)) after |y| ≤ $ymax selection\n")
 
 setups = [
-    ("ring128",   [ring_event(ev) for ev in selected], ring_reference(128),          ring_cos_metric()),
-    ("ring2",     [ring_event(ev) for ev in selected], ring_reference(2),            ring_cos_metric()),
+    ("ring128",   [EnergyFlow._ring_event(ev) for ev in selected], ring_reference(128),          ring_cos_metric()),
+    ("ring2",     [EnergyFlow._ring_event(ev) for ev in selected], ring_reference(2),            ring_cos_metric()),
     ("cyl16",     selected,                            cylinder_reference(16, ymax), cylinder_metric(ymax)),
     ("sphere192", sphere_selected,                     sphere_reference(2),          sphere_cos_metric()),
     ("sphere48",  sphere_selected,                     sphere_reference(1),          sphere_cos_metric()),
