@@ -70,7 +70,7 @@ get_backend() = EMD_BACKEND[]
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd!(ws, ev0, ev1; backend=get_backend(), gdim=nothing, n_iter_max=100_000)
+    emd!(ws, ev0, ev1; backend=get_backend(), gdim=nothing, n_iter_max=100_000, return_flow=false)
 
 Compute the EMD between two events using a pre-allocated workspace,
 avoiding per-call allocations. This is the fastest path when computing many
@@ -95,6 +95,7 @@ workspace, not passed as keywords — set them when constructing it.
 
 # Returns
 The EMD value (`Float64` or `Float32` matching the workspace precision).
+If `return_flow=true`, returns `(emd_value, transport_plan)`.
 
 # Example
 ```julia
@@ -133,11 +134,12 @@ function emd!(ws::SinkhornWorkspace,
               backend::Symbol = :sinkhorn,
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
-              metric::Union{Nothing,GroundMetric} = nothing)
+              metric::Union{Nothing,GroundMetric} = nothing,
+              return_flow::Bool = false)
     if metric !== nothing && !(metric isa EuclideanMetric)
         error("sinkhorn backend currently supports only EuclideanMetric().")
     end
-    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim)
+    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim, return_flow=return_flow)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -146,7 +148,7 @@ end
 
 """
     emd(ev0, ev1; backend=get_backend(), R=1.0, beta=1.0, norm=false,
-        gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
+        gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(), return_flow=false)
 
 Compute the Energy Mover's Distance between two events. Allocates a fresh
 workspace each call; for repeated calls prefer [`emd!`](@ref) with a
@@ -166,18 +168,21 @@ pre-allocated workspace.
   ground distance for a true metric).
 - `beta`: exponent applied to the scaled ground distance (angular exponent).
 - `norm`: if `true`, normalize each event's weights to sum to 1 before
-  solving. If `false` (default) and the total weights differ, the weight
-  difference is handled by a fictitious particle at unit cost, matching the
-  Python EnergyFlow convention.
+    solving. If `false` (default) and the total weights differ, the weight
+    difference is handled by a fictitious particle at unit cost, matching the
+    Python EnergyFlow convention.
 - `gdim`: number of coordinate dimensions to use (`nothing` = all columns
   after the first).
 - `n_iter_max`: maximum solver iterations.
 - `metric`: ground distance metric, a [`GroundMetric`](@ref) instance
-  (default [`EuclideanMetric()`](@ref EuclideanMetric)).
+    (default [`EuclideanMetric()`](@ref EuclideanMetric)).
+- `return_flow`: if `true`, also return the optimal transport plan matrix.
 
 # Returns
-The EMD value: `Float64` for `:ns64`/`:ot64`/`:sinkhorn`, `Float32` for
-`:ns32`/`:ot32`.
+The EMD value by default. If `return_flow=true`, returns `(emd_value,
+transport_plan)`. For `norm=false`, the returned plan includes any fictitious
+source/target row or column introduced by the solver so its marginals match
+the balanced problem that was actually solved.
 
 # Example
 ```julia
@@ -199,21 +204,22 @@ function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
              norm::Bool      = false,
              gdim::Union{Nothing,Int} = nothing,
              n_iter_max::Int = 100_000,
-             metric::GroundMetric = EuclideanMetric())
+             metric::GroundMetric = EuclideanMetric(),
+             return_flow::Bool = false)
 
     if backend === :ns64
-        return emd_ns64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ns64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
     elseif backend === :ot64
-        return emd_ot64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ot64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
     elseif backend === :ns32
-        return emd_ns32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ns32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
     elseif backend === :ot32
-        return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
     elseif backend === :sinkhorn
         if metric isa GroundMetric && !(metric isa EuclideanMetric)
             error("sinkhorn backend currently supports only EuclideanMetric().")
         end
-        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max)
+        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, return_flow=return_flow)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end

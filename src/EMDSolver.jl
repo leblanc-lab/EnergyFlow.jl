@@ -268,13 +268,26 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   norm::Bool     = false,
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
-                  metric::GroundMetric = EuclideanMetric())
+                  metric::GroundMetric = EuclideanMetric(),
+                  return_flow::Bool = false)
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
 
-    val, _status = _emd_raw_alloc(w0, c0, w1, c1; beta=beta, R=R, norm=norm, max_iter=n_iter_max, metric=metric)
-    return val
+    if !return_flow
+        val, _status = _emd_raw_alloc(w0, c0, w1, c1; beta=beta, R=R, norm=norm, max_iter=n_iter_max, metric=metric)
+        return val
+    end
+
+    V = promote_type(eltype(w0), eltype(c0), eltype(w1), eltype(c1), Float64)
+    n0 = length(w0)
+    n1 = length(w1)
+    ws = EMDWorkspace{V}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
+    val, _status = _emd_raw!(ws,
+                             convert(Vector{V}, w0), convert(Matrix{V}, c0),
+                             convert(Vector{V}, w1), convert(Matrix{V}, c1);
+                             max_iter=n_iter_max)
+    return val, _transport_plan(ws.ns; arc_mixing=false)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -318,7 +331,8 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   norm::Bool     = false,
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
-                  metric::GroundMetric = EuclideanMetric())
+                  metric::GroundMetric = EuclideanMetric(),
+                  return_flow::Bool = false)
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
@@ -331,7 +345,7 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true)
-    return val
+    return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
 end
 
 # ═════════════════════════════════════════════════════════════════════
@@ -373,7 +387,8 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   norm::Bool     = false,
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
-                  metric::GroundMetric = EuclideanMetric())
+                  metric::GroundMetric = EuclideanMetric(),
+                  return_flow::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
@@ -381,8 +396,13 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     n0 = length(w0)
     n1 = length(w1)
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
+    if !return_flow
+        val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
+        return val
+    end
+
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
-    return val
+    return val, _transport_plan(ws.ns; arc_mixing=false)
 end
 
 # ─── emd_ot32! / emd_ot32 — OT-style (arc mixing) Float32 backend ──
@@ -419,7 +439,8 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   norm::Bool     = false,
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
-                  metric::GroundMetric = EuclideanMetric())
+                  metric::GroundMetric = EuclideanMetric(),
+                  return_flow::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
@@ -428,5 +449,5 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     n1 = length(w1)
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true)
-    return val
+    return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
 end

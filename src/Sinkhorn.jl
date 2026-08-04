@@ -214,6 +214,32 @@ function _sinkhorn_log_domain!(ws::SinkhornWorkspace{V},
     return total, converged ? :optimal : :max_iter
 end
 
+function _sinkhorn_transport_plan(ws::SinkhornWorkspace{V}, n0::Int, n1::Int) where V
+    plan = Matrix{V}(undef, n0, n1)
+    @inbounds for j in 1:n1, i in 1:n0
+        log_P = ws.log_u[i] + ws.log_K[i,j] + ws.log_v[j]
+        plan[i, j] = log_P > V(-500) ? exp(log_P) : zero(V)
+    end
+    return plan
+end
+
+function _sinkhorn_plan_dims(ws::SinkhornWorkspace{V},
+                             weights0::AbstractVector{V}, weights1::AbstractVector{V}) where V
+    n0_eff = length(weights0)
+    n1_eff = length(weights1)
+
+    if !ws.norm
+        weight_diff = sum(weights1) - sum(weights0)
+        if weight_diff > sqrt(eps(V))
+            n0_eff += 1
+        elseif weight_diff < -sqrt(eps(V))
+            n1_eff += 1
+        end
+    end
+
+    return n0_eff, n1_eff
+end
+
 # ─────────────────────────────────────────────────────────────────────
 # Sinkhorn with ε-annealing
 # ─────────────────────────────────────────────────────────────────────
@@ -409,13 +435,15 @@ Returns the regularised transport cost (same precision as the workspace).
 """
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
-                       gdim::Union{Nothing,Int} = nothing) where V
+                       gdim::Union{Nothing,Int} = nothing,
+                       return_flow::Bool = false) where V
 
     w0, c0 = _unpack_event(V, ev0, gdim)
     w1, c1 = _unpack_event(V, ev1, gdim)
 
+    n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
 """
@@ -447,7 +475,8 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                       max_iter_sinkhorn::Int = 5000,
                       sinkhorn_tol::Real = 1e-9,
                       annealing::Bool = true,
-                      n_iter_max::Int = 100_000)  # accepted but unused (API compat)
+                      n_iter_max::Int = 100_000,  # accepted but unused (API compat)
+                      return_flow::Bool = false)
 
     V = Float64
     w0, c0 = _unpack_event(V, ev0, gdim)
@@ -459,8 +488,9 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                                epsilon=epsilon, max_iter=max_iter_sinkhorn,
                                tol=sinkhorn_tol, annealing=annealing)
 
+    n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    return val
+    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
 # ─────────────────────────────────────────────────────────────────────

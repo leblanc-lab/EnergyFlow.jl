@@ -169,3 +169,44 @@ function _emd_raw_alloc(weights0::AbstractVector{<:Real}, coords0::AbstractMatri
 
     return _emd_raw!(ws, w0, c0, w1, c1; max_iter=max_iter)
 end
+
+"""
+    _transport_plan(ns::NetworkSimplexSolver; arc_mixing=false) -> Matrix
+
+Reconstruct the optimal transport plan from a solved network-simplex workspace.
+The returned matrix has size `ns.n0 × ns.n1`, where `ns.n0`/`ns.n1` are the
+effective solver dimensions. For `norm=true` this is just the real-particle
+transport block; for `norm=false` it includes any fictitious source/target row
+or column introduced by the solver. The artificial root arcs are never
+included.
+"""
+function _transport_plan(ns::NetworkSimplexSolver{V}; arc_mixing::Bool = false) where V
+    plan = Matrix{V}(undef, ns.n0, ns.n1)
+    arc_num = ns.arc_num
+
+    if arc_mixing
+        perm = Vector{Int}(undef, arc_num)
+        k = ns.block_size
+        i = 1
+        j = 1
+        @inbounds for a_orig in 1:arc_num
+            perm[a_orig] = i
+            i += k
+            if i > arc_num
+                j += 1
+                i = j
+            end
+        end
+
+        @inbounds for a_orig in 1:arc_num
+            a = perm[a_orig]
+            plan[(a_orig - 1) ÷ ns.n1 + 1, (a_orig - 1) % ns.n1 + 1] = ns.flows[a]
+        end
+    else
+        @inbounds for a in 1:arc_num
+            plan[(a - 1) ÷ ns.n1 + 1, (a - 1) % ns.n1 + 1] = ns.flows[a]
+        end
+    end
+
+    return plan
+end

@@ -10,6 +10,8 @@ test_log("="^70)
     ev1 = reshape([1.0, 1.0], 1, 2)
     ev2 = reshape([1.0, 2.0], 1, 2)
     events = [ev0, ev1, ev2]
+    ev0_plan = [2.0 0.0; 1.0 1.0]
+    ev1_plan = [1.0 0.5]
 
     original_backend = get_backend()
     try
@@ -21,6 +23,15 @@ test_log("="^70)
         test_log("  ns64 = $ns64_val, ot64 = $ot64_val")
         @test ns64_val ≈ emd_ns64(ev0, ev1; R=1.0, beta=1.0, norm=true)
         @test ot64_val ≈ emd_ot64(ev0, ev1; R=1.0, beta=1.0, norm=true)
+
+        ns64_val_flow, ns64_plan = emd(ev0_plan, ev1_plan; backend=:ns64, R=1.0, beta=1.0, norm=true, return_flow=true)
+        ot64_val_flow, ot64_plan = emd(ev0_plan, ev1_plan; backend=:ot64, R=1.0, beta=1.0, norm=true, return_flow=true)
+        @test ns64_val_flow ≈ 0.5 atol=1e-10
+        @test ot64_val_flow ≈ 0.5 atol=1e-10
+        @test size(ns64_plan) == (2, 1)
+        @test size(ot64_plan) == (2, 1)
+        @test ns64_plan ≈ Float64[2/3; 1/3]
+        @test ot64_plan ≈ Float64[2/3; 1/3]
 
         val32 = emd(ev0, ev1; backend=:ns32, R=1.0, beta=1.0, norm=true)
         test_log("  ns32 = $val32")
@@ -110,11 +121,28 @@ test_log("="^70)
         @test sink_val ≥ 0.0
         @test_throws ErrorException emd(ev0, ev1; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, metric=metric)
 
+        sink_val_flow, sink_plan = emd(ev0_plan, ev1_plan; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, return_flow=true)
+        @test sink_val_flow ≈ 0.5 atol=1e-10
+        @test size(sink_plan) == (2, 1)
+        @test sink_plan ≈ Float64[2/3; 1/3]
+
+        ns64_unbalanced_val, ns64_unbalanced_plan = emd([1.0 0.0], [0.5 1.0]; backend=:ns64, norm=false, return_flow=true)
+        sink_unbalanced_val, sink_unbalanced_plan = emd([1.0 0.0], [0.5 1.0]; backend=:sinkhorn, norm=false, return_flow=true)
+        @test ns64_unbalanced_val ≈ sink_unbalanced_val atol=1e-10
+        @test size(ns64_unbalanced_plan) == (1, 2)
+        @test size(sink_unbalanced_plan) == (1, 2)
+        @test ns64_unbalanced_plan ≈ Float64[0.5 0.5]
+        @test sink_unbalanced_plan ≈ Float64[0.5 0.5]
+
         sink_ws = SinkhornWorkspace(2, 2; beta=1.0, R=1.0, norm=true, epsilon=0.01)
-        sink_inplace = emd!(sink_ws, ev0, ev1)
+        sink_inplace = emd!(sink_ws, ev0_plan, ev1_plan)
         test_log("  sinkhorn emd! = $sink_inplace")
         @test sink_inplace isa Float64
         @test_throws ErrorException emd!(sink_ws, ev0, ev1; metric=metric)
+
+        sink_inplace_flow, sink_inplace_plan = emd!(sink_ws, ev0_plan, ev1_plan; return_flow=true)
+        @test sink_inplace_flow ≈ sink_inplace atol=1e-10
+        @test size(sink_inplace_plan) == (2, 1)
 
         @test_throws ErrorException emd(ev0, ev1; backend=:bogus)
         @test_throws ErrorException emd!(ws64, ev0, ev1; backend=:bogus)
