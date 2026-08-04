@@ -50,6 +50,10 @@ EnergyFlow.load_hepmc3_events
 EnergyFlow.HepMC3.load_hepmc3_momenta
 ```
 
+```@docs
+EnergyFlow.HepMC3
+```
+
 ## Event Isotropy
 
 ```@docs
