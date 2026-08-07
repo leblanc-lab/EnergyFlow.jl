@@ -83,7 +83,7 @@ end
         status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=1000)
         test_log("  full_parallel dispatch: status=$status n_iters=$(ns.n_iters) n_arc_scans=$(ns.n_arc_scans)")
         @test status == :optimal
-        @test ns.n_arc_scans >= ns.n_iters * ns.arc_num   # full scan every pivot
+        @test ns.n_arc_scans == (ns.n_iters + 1) * ns.arc_num
     end
 
     @testset "agrees with serial on random problems" begin
@@ -119,6 +119,35 @@ end
         status = network_simplex!(ns, [0.6, 0.4], [0.5, 0.5]; max_iter=0)
         test_log("  full_parallel max_iter: status=$status")
         @test status == :max_iter
+    end
+
+    @testset "nested inside an outer threaded loop" begin
+        n0, n1 = 10, 10
+        nprob  = 8
+        probs  = [rand(MersenneTwister(100 + i), n0 * n1) for i in 1:nprob]
+        sw = fill(1.0 / n0, n0)
+        tw = fill(1.0 / n1, n1)
+
+        ref = map(probs) do costs
+            ns = NetworkSimplexSolver{Float64}(n0, n1)
+            ns.costs[1:(n0*n1)] .= costs
+            @assert network_simplex!(ns, sw, tw) == :optimal
+            ns.total_cost
+        end
+
+        statuses = Vector{Symbol}(undef, nprob)
+        costs_out = Vector{Float64}(undef, nprob)
+        Threads.@threads for i in 1:nprob
+            ns = NetworkSimplexSolver{Float64}(n0, n1)   # one solver per task
+            ns.pivot_mode = :full_parallel
+            ns.costs[1:(n0*n1)] .= probs[i]
+            statuses[i]  = network_simplex!(ns, sw, tw)
+            costs_out[i] = ns.total_cost
+        end
+
+        test_log("  full_parallel nested: nthreads=$(Threads.nthreads()) statuses=$(unique(statuses))")
+        @test all(==(:optimal), statuses)
+        @test all(i -> isapprox(costs_out[i], ref[i]; rtol=1e-10), 1:nprob)
     end
 end
 
