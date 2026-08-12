@@ -139,29 +139,39 @@ def load_single_pair():
     return series
 
 
-def load_thread_scaling():
-    """Return ({threads: seconds}, pot_seconds) for one pairwise workload.
-
-    Uses the 50v50 split, the larger of the two, so the measurement is not
-    dominated by startup. Backends are summed to a single per-thread number by
-    taking :ns64, the default.
-    """
+def _thread_series(pattern, backend):
+    """Collect {threads: seconds} from thread-tagged result files."""
     header = ['Split', 'Setup', 'Backend', 'Time (s)', 'Pairs']
-    by_threads = {}
+    series = {}
     for name in sorted(os.listdir(RESULT_DIR)) if os.path.isdir(RESULT_DIR) else []:
-        match = re.fullmatch(r'emds_julia_t(\d+)\.md', name)
+        match = re.fullmatch(pattern, name)
         if not match:
             continue
         threads = int(match.group(1))
         for row in parse_markdown_table(os.path.join(RESULT_DIR, name), header):
-            if row['Split'] == '50v50' and row['Setup'] == SETUP and row['Backend'] == 'ns64':
-                by_threads[threads] = float(row['Time (s)'])
+            if (row['Split'] == '50v50' and row['Setup'] == SETUP
+                    and row['Backend'] == backend):
+                series[threads] = float(row['Time (s)'])
+    return series
 
+
+def load_thread_scaling():
+    """Return (julia, wasserstein, pot_seconds) for the 50v50 workload.
+
+    Both threaded implementations are collected per thread count, so the panel
+    compares equal parallelism. POT is a single scalar: ot.lp.emd2 has no
+    internal threading, so it is drawn as a one-thread reference rather than a
+    curve, and is not a fair comparison at higher thread counts.
+    """
+    julia = _thread_series(r'emds_julia_t(\d+)\.md', 'ns64')
+    wass = _thread_series(r'wass_pairwise_t(\d+)\.md', 'Wass')
+
+    header = ['Split', 'Setup', 'Backend', 'Time (s)', 'Pairs']
     pot = None
     for row in parse_markdown_table(os.path.join(RESULT_DIR, 'emds_python.md'), header):
         if row['Split'] == '50v50' and row['Setup'] == SETUP:
             pot = float(row['Time (s)'])
-    return by_threads, pot
+    return julia, wass, pot
 
 
 def plot_single_pair(ax, series):
@@ -184,30 +194,33 @@ def plot_single_pair(ax, series):
     ax.legend(fontsize=7.5, frameon=False, loc='upper left')
 
 
-def plot_thread_scaling(ax, by_threads, pot):
-    threads = sorted(by_threads)
-    times = [by_threads[t] for t in threads]
-    color, marker, _ = STYLES['ns64']
+def plot_thread_scaling(ax, julia, wass, pot):
+    all_threads = sorted(set(julia) | set(wass))
 
-    ax.plot(threads, times, marker=marker, color=color, linewidth=1.6,
-            markersize=5, label='EnergyFlow.jl :ns64')
+    for series, key, label in ((julia, 'ns64', 'EnergyFlow.jl :ns64'),
+                               (wass, 'Wass', 'wasserstein (OpenMP)')):
+        if not series:
+            continue
+        threads = sorted(series)
+        color, marker, _ = STYLES[key]
+        ax.plot(threads, [series[t] for t in threads], marker=marker, color=color,
+                linewidth=1.6, markersize=5, label=label)
 
-    # Ideal strong scaling from the measured single-thread point, so the reader
-    # can see how far the real curve departs from linear speedup.
-    if threads and threads[0] == 1:
-        ideal = [times[0] / t for t in threads]
-        ax.plot(threads, ideal, linestyle=':', color='0.45', linewidth=1.3,
-                label='ideal linear scaling')
+    # Ideal strong scaling from Julia's measured single-thread point, so the
+    # reader can see how far the real curves depart from linear speedup.
+    if julia and min(julia) == 1:
+        ax.plot(all_threads, [julia[1] / t for t in all_threads], linestyle=':',
+                color='0.45', linewidth=1.3, label='ideal linear scaling')
 
     if pot is not None:
         ax.axhline(pot, linestyle='--', color=STYLES['POT'][0], linewidth=1.3,
-                   label='POT (single-threaded)')
+                   label='POT (no threading)')
 
     ax.set_xscale('log', base=2)
     ax.set_yscale('log')
-    ax.set_xticks(threads)
-    ax.set_xticklabels([str(t) for t in threads])
-    ax.set_xlabel('Julia threads')
+    ax.set_xticks(all_threads)
+    ax.set_xticklabels([str(t) for t in all_threads])
+    ax.set_xlabel('Threads')
     ax.set_ylabel('Time for 2500 pairs (s)')
     ax.set_title('(b) Pairwise EMD scaling', loc='left', fontsize=10)
     ax.grid(True, which='major', alpha=0.3)
@@ -226,11 +239,12 @@ def main():
                            'emds_python.md')]
     if os.path.isdir(RESULT_DIR):
         inputs += [os.path.join(RESULT_DIR, name) for name in os.listdir(RESULT_DIR)
-                   if re.fullmatch(r'emds_julia_t\d+\.md', name)]
+                   if re.fullmatch(r'(emds_julia|wass_pairwise)_t\d+\.md', name)]
     check_provenance(inputs)
 
     series = load_single_pair()
-    by_threads, pot = load_thread_scaling()
+    julia_threads, wass_threads, pot = load_thread_scaling()
+    by_threads = julia_threads or wass_threads
 
     if not series:
         sys.exit('No single-pair results found. Run single_emd_benchmark.jl and '
@@ -247,7 +261,11 @@ def main():
 
     plot_single_pair(axes[0], series)
     if two_panel:
-        plot_thread_scaling(axes[1], by_threads, pot)
+        plot_thread_scaling(axes[1], julia_threads, wass_threads, pot)
+        if not wass_threads:
+            print('No wass_pairwise_t*.md found: panel (b) shows Julia against a '
+                  'single-threaded POT reference only, which is not a fair '
+                  'threaded comparison. Run wass_pairwise_benchmark.py per thread count.')
 
     fig.tight_layout()
     output = os.path.normpath(args.output)

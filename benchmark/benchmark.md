@@ -131,6 +131,49 @@ ENERGYFLOW_BENCH_SIZES=2,10,50 ENERGYFLOW_BENCH_TARGET=0.3 julia --project=. sin
 The older `single_emd_benchmark*.ipynb` notebooks remain for interactive
 exploration; they sweep asymmetric event sizes the scripts do not.
 
+## Threaded pairwise comparison (fair parallel test)
+
+`ot.lp.emd2` is single-threaded and driven from a Python loop, so comparing an
+N-thread Julia `emds` against it measures Julia's threading against Python
+having none. The `wasserstein` library — the compiled backend behind Python
+EnergyFlow — has a genuinely multithreaded pairwise driver, so running it at
+the same thread count is the like-for-like test:
+
+```bash
+cd EnergyFlow.jl/benchmark
+julia --project=. -t 8 emds_benchmark.jl            # -> result/emds_julia_t8.md
+python wass_pairwise_benchmark.py --threads 8       # -> result/wass_pairwise_t8.md
+```
+
+Panel (b) of the figure overlays the two. POT still appears, drawn as a
+horizontal reference line rather than a curve, and is a fair comparison only
+against the single-thread point.
+
+## Large distance matrix
+
+The HepMC sample holds 100 events, capping a pairwise matrix at 100×100.
+`make_large_sample.jl` builds a larger sample by drawing those events with
+replacement and applying an independent random azimuthal rotation to each draw.
+A φ rotation is a symmetry of the detector geometry and the multiplicity
+distribution — which is what sets solve cost — is preserved exactly, so this is
+valid for timing and for nothing else. The resulting matrix is not a physics
+measurement.
+
+Both languages read the same generated CSV, so they solve byte-identical
+problems:
+
+```bash
+cd EnergyFlow.jl/benchmark
+julia --project=. make_large_sample.jl 1000                          # -> result/large_sample.csv
+julia --project=. -t 48 large_pairwise_benchmark.jl                  # -> result/large_pairwise_julia_t48.md
+python wass_pairwise_benchmark.py --threads 48 --sample result/large_sample.csv
+```
+
+Note what this does and does not show. Pairwise EMD is embarrassingly parallel,
+so the per-pair advantage at 500k pairs is the same as at 2500 pairs — the
+ratio does not improve with matrix size. What a large matrix demonstrates is
+absolute tractability at the scale analyses actually use.
+
 ## Paper figure
 
 ```bash

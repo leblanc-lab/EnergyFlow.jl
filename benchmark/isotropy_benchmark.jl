@@ -17,8 +17,13 @@ using Statistics
 # the fastest are milliseconds — so a single measurement is dominated by timer
 # noise and thread-startup effects. Repeat each point and report the median.
 const TARGET_SECONDS = 3.0
-const MIN_REPS       = 5
+const MIN_REPS       = 3
 const MAX_REPS       = 2_000
+# Above this per-call cost, the minimum repetition count would dominate the
+# runtime (sphere3072 takes tens of seconds per pass), and the measurement is
+# long enough that timer noise is irrelevant anyway.
+const LONG_SOLVE_SECONDS = 15.0
+const LONG_SOLVE_REPS    = 2
 
 """
     timed(f) -> (median_s, min_s, reps)
@@ -33,7 +38,8 @@ compilation as though it were solve time.
 function timed(f)
     f()
     t0 = time_ns(); f(); est = (time_ns() - t0) / 1e9
-    reps = clamp(ceil(Int, TARGET_SECONDS / max(est, 1e-9)), MIN_REPS, MAX_REPS)
+    reps = est > LONG_SOLVE_SECONDS ? LONG_SOLVE_REPS :
+           clamp(ceil(Int, TARGET_SECONDS / max(est, 1e-9)), MIN_REPS, MAX_REPS)
     times = Vector{Float64}(undef, reps)
     for i in 1:reps
         t0 = time_ns()
@@ -62,6 +68,12 @@ setups = [
     ("cyl16",     selected,                            cylinder_reference(16, ymax), cylinder_metric(ymax)),
     ("sphere192", sphere_selected,                     sphere_reference(2),          sphere_cos_metric()),
     ("sphere48",  sphere_selected,                     sphere_reference(1),          sphere_cos_metric()),
+    # 12·(2^n)² points: n=3 -> 768, n=4 -> 3072. The finer references are the
+    # ones that matter for physics — 3072 is the resolution at which the
+    # spherical reference stops limiting the observable — and they are also
+    # where the solver is actually stressed.
+    ("sphere768",  sphere_selected,                    sphere_reference(3),          sphere_cos_metric()),
+    ("sphere3072", sphere_selected,                    sphere_reference(4),          sphere_cos_metric()),
 ]
 
 results = []

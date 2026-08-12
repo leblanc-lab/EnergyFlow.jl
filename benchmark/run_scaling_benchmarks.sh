@@ -13,7 +13,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=0
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=benchmark-%j.out
 #
 # --mem=0 requests all memory on the node. Without it an exclusive job can still
@@ -179,11 +179,24 @@ run_step "single-pair Python" ${PYTHON} single_emd_benchmark_python.py
 echo
 
 echo "=== Pairwise EMD across thread counts (figure panel b) ==="
+# Julia and wasserstein are run at each thread count so the scaling comparison
+# is threaded-against-threaded. POT is measured once, single-threaded, because
+# ot.lp.emd2 has no internal parallelism — it is the reference for the
+# single-thread column only, not for the threaded ones.
 for t in ${THREAD_COUNTS}; do
     echo "--- ${t} thread(s) ---"
     run_step "pairwise Julia (${t} threads)" ${JULIA} --project=. -t "${t}" emds_benchmark.jl
+    run_step "pairwise wasserstein (${t} threads)" ${PYTHON} wass_pairwise_benchmark.py --threads "${t}"
 done
-run_step "pairwise Python" ${PYTHON} emds_benchmark_python.py
+run_step "pairwise POT (single-threaded)" ${PYTHON} emds_benchmark_python.py
+echo
+
+echo "=== Large distance matrix (${LARGE_NEVENTS:-1000} events, full width) ==="
+run_step "large sample generation" ${JULIA} --project=. make_large_sample.jl "${LARGE_NEVENTS:-1000}"
+run_step "large matrix Julia (${MAX_THREADS} threads)" \
+    ${JULIA} --project=. -t "${MAX_THREADS}" large_pairwise_benchmark.jl
+run_step "large matrix wasserstein (${MAX_THREADS} threads)" \
+    ${PYTHON} wass_pairwise_benchmark.py --threads "${MAX_THREADS}" --sample result/large_sample.csv
 echo
 
 echo "=== Event isotropy (paper table) ==="

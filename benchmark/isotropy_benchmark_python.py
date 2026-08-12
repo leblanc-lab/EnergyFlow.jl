@@ -206,6 +206,9 @@ def main():
     cyl16 = cylinder_reference(16, ymax)
     sph192 = sphere_reference(2)
     sph48 = sphere_reference(1)
+    # 12*(2^n)^2 points: n=3 -> 768, n=4 -> 3072. Must match isotropy_benchmark.jl.
+    sph768 = sphere_reference(3)
+    sph3072 = sphere_reference(4)
 
     def w(ref):
         return np.full(len(ref), 1.0 / len(ref))
@@ -217,6 +220,8 @@ def main():
         ("cyl16",     selected,        lambda ev: (ev[:, 0], cdist_cylinder(ev[:, 1:], cyl16, ymax), w(cyl16))),
         ("sphere192", sphere_selected, lambda ev: (ev[:, 0], cdist_sphere_cos(ev[:, 1:4], sph192), w(sph192))),
         ("sphere48",  sphere_selected, lambda ev: (ev[:, 0], cdist_sphere_cos(ev[:, 1:4], sph48), w(sph48))),
+        ("sphere768", sphere_selected, lambda ev: (ev[:, 0], cdist_sphere_cos(ev[:, 1:4], sph768), w(sph768))),
+        ("sphere3072", sphere_selected, lambda ev: (ev[:, 0], cdist_sphere_cos(ev[:, 1:4], sph3072), w(sph3072))),
     ]
 
     results = []
