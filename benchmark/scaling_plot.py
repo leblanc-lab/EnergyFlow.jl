@@ -80,6 +80,50 @@ def parse_markdown_table(path, expected_header):
     return rows
 
 
+def parse_env_block(path):
+    """Return the `## Environment` table of a result file as a dict."""
+    if not os.path.isfile(path):
+        return {}
+    env = {}
+    in_table = False
+    for line in open(path):
+        line = line.strip()
+        if not line.startswith('|'):
+            continue
+        cells = [c.strip() for c in line.strip('|').split('|')]
+        if len(cells) != 2 or all(set(c) <= set('-: ') for c in cells):
+            continue
+        if cells == ['Field', 'Value']:
+            in_table = True
+            continue
+        if in_table:
+            env[cells[0]] = cells[1]
+    return env
+
+
+def check_provenance(paths):
+    """Warn if the inputs were not all produced on the same machine.
+
+    The panels put Julia and Python timings on shared axes, so a figure built
+    from a Julia run on one machine and a Python run on another is misleading
+    in a way nothing else here would catch. A stale result file left behind by
+    a failed run is the realistic way this happens.
+    """
+    seen = {}
+    for path in paths:
+        env = parse_env_block(path)
+        cpu = env.get('CPU')
+        if cpu:
+            seen.setdefault(cpu, []).append(os.path.basename(path))
+    if len(seen) > 1:
+        print('WARNING: result files come from more than one machine. The figure '
+              'will mix them:')
+        for cpu, files in seen.items():
+            print(f'  {cpu}: {", ".join(sorted(files))}')
+        print('  Rerun the missing benchmarks on one machine before publishing.')
+    return seen
+
+
 def load_single_pair():
     """Return {backend: [(n, seconds), ...]} for the chosen setup."""
     header = ['n', 'Setup', 'Backend', 'Median (s)', 'Min (s)', 'Reps']
@@ -176,6 +220,14 @@ def main():
         os.path.dirname(os.path.abspath(__file__)), '..', 'paper', 'scaling.png'))
     parser.add_argument('--dpi', type=int, default=300)
     args = parser.parse_args()
+
+    inputs = [os.path.join(RESULT_DIR, name)
+              for name in ('single_emd_julia.md', 'single_emd_python.md',
+                           'emds_python.md')]
+    if os.path.isdir(RESULT_DIR):
+        inputs += [os.path.join(RESULT_DIR, name) for name in os.listdir(RESULT_DIR)
+                   if re.fullmatch(r'emds_julia_t\d+\.md', name)]
+    check_provenance(inputs)
 
     series = load_single_pair()
     by_threads, pot = load_thread_scaling()
