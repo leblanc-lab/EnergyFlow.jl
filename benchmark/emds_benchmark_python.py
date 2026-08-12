@@ -12,10 +12,14 @@
 #   julia --project=. emds_compare.jl        # writes result/emds_compare.md
 
 import os
+import sys
 import time
 
 import numpy as np
 from ot.lp import emd2
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from envinfo import print_env, write_env_block
 
 _EPS = np.sqrt(np.finfo(np.float64).eps)
 
@@ -110,6 +114,7 @@ def emds_pot(events_a, events_b, R, beta, norm, cost_fn):
 
 
 def main():
+    print_env()
     path = os.path.join(os.path.dirname(__file__), '..', 'data', 'sk_example_PU.hepmc')
     events = load_hepmc3(path, 100)
     print(f'Loaded {len(events)} events')
@@ -140,6 +145,7 @@ def main():
     os.makedirs('result', exist_ok=True)
     with open('result/emds_python.md', 'w') as f:
         f.write("# Pairwise EMD Benchmark — Python (POT ot.lp.emd2)\n\n")
+        write_env_block(f)
         f.write("| Split | Setup | Backend | Time (s) | Pairs |\n")
         f.write("|---|---|---|---|---|\n")
         for r in results:

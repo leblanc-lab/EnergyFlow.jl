@@ -7,9 +7,41 @@
 # timings so results can be checked numerically against the POT implementation
 # (isotropy_benchmark_python.py).
 
+include("envinfo.jl")
+
 using EnergyFlow
 using Printf
 using Statistics
+
+# Timing budget per (setup, backend) point. The isotropy workloads are small —
+# the fastest are milliseconds — so a single measurement is dominated by timer
+# noise and thread-startup effects. Repeat each point and report the median.
+const TARGET_SECONDS = 3.0
+const MIN_REPS       = 5
+const MAX_REPS       = 2_000
+
+"""
+    timed(f) -> (median_s, min_s, reps)
+
+Time `f()` repeatedly, returning the median and minimum wall time per call.
+
+`f` is warmed up before any measurement. This matters more than it looks: the
+previous version of this benchmark warmed up only the default backend and then
+timed all four, so `:ot64`, `:ns32` and `:ot32` each reported their own
+compilation as though it were solve time.
+"""
+function timed(f)
+    f()
+    t0 = time_ns(); f(); est = (time_ns() - t0) / 1e9
+    reps = clamp(ceil(Int, TARGET_SECONDS / max(est, 1e-9)), MIN_REPS, MAX_REPS)
+    times = Vector{Float64}(undef, reps)
+    for i in 1:reps
+        t0 = time_ns()
+        f()
+        times[i] = (time_ns() - t0) / 1e9
+    end
+    return median(times), minimum(times), reps
+end
 
 const events = load_hepmc3_events(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100)
 const ymax = 4.0
@@ -21,7 +53,7 @@ const selected = select_rapidity(events, ymax)
 const momenta = load_hepmc3_momenta(joinpath(@__DIR__, "..", "data", "sk_example_PU.hepmc"); maxevents=100)
 const sphere_selected = select_sphere_events(momenta)
 
-println("Julia $(VERSION), $(Threads.nthreads()) threads")
+print_env()
 println("Loaded $(length(events)) events, $(length(selected)) after |y| ≤ $ymax selection\n")
 
 setups = [
@@ -34,16 +66,17 @@ setups = [
 
 results = []
 for (setup_name, evs, ref, metric) in setups
-    emds(evs[1:2], [ref]; R=1.0, beta=1.0, norm=true, metric=metric)  # warmup
     for backend in [:ns64, :ot64, :ns32, :ot32]
-        t0 = time_ns()
+        # Each backend is warmed up inside timed(), so no backend pays for its
+        # own compilation in the reported number.
+        med, mn, reps = timed() do
+            emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend, metric=metric)
+        end
         vals = emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend, metric=metric)
-        t1 = time_ns()
-        elapsed = (t1 - t0) / 1e9
-        push!(results, (setup=setup_name, backend=backend, time_s=elapsed,
-                        events=length(evs), mean_iso=mean(vals)))
-        @printf("%-8s %-6s %8.3f s  (%d events, mean isotropy %.6f)\n",
-                setup_name, backend, elapsed, length(evs), mean(vals))
+        push!(results, (setup=setup_name, backend=backend, time_s=med, min_s=mn,
+                        reps=reps, events=length(evs), mean_iso=mean(vals)))
+        @printf("%-8s %-6s %8.4f s  (min %8.4f s, %d reps, %d events, mean isotropy %.6f)\n",
+                setup_name, backend, med, mn, reps, length(evs), mean(vals))
     end
 end
 
@@ -55,15 +88,16 @@ nthr = Threads.nthreads()
 mkpath(joinpath(@__DIR__, "result"))
 outfile = "isotropy_julia_t$(nthr).md"
 open(joinpath(@__DIR__, "result", outfile), "w") do io
-    println(io, "# Event Isotropy Benchmark — Julia EnergyFlow.jl")
-    println(io, "\nJulia $(VERSION), $(nthr) thread(s)")
+    println(io, "# Event Isotropy Benchmark — Julia EnergyFlow.jl\n")
     println(io, "ring: N points in φ, (π/(π-2))·(1-cos Δφ); cylinder: 16×$(floor(Int, ymax*16/π)) grid, |y| ≤ $ymax")
     println(io, "sphere: HEALPix unit sphere (192/48 points), 2·(1-cos θ) on 3-momentum directions\n")
-    println(io, "| Setup | Backend | Time (s) | Events | Mean isotropy |")
-    println(io, "|---|---|---|---|---|")
+    println(io, "Time is the median over `Reps` repetitions, after a per-backend warmup.\n")
+    write_env_block(io)
+    println(io, "| Setup | Backend | Time (s) | Min (s) | Reps | Events | Mean isotropy |")
+    println(io, "|---|---|---|---|---|---|---|")
     for r in results
-        @printf(io, "| %s | %s | %.3f | %d | %.6f |\n",
-                r.setup, r.backend, r.time_s, r.events, r.mean_iso)
+        @printf(io, "| %s | %s | %.4f | %.4f | %d | %d | %.6f |\n",
+                r.setup, r.backend, r.time_s, r.min_s, r.reps, r.events, r.mean_iso)
     end
 end
 println("\nResults saved to result/$outfile")

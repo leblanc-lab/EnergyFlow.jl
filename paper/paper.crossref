@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<doi_batch xmlns="http://www.crossref.org/schema/5.3.1"
+           xmlns:ai="http://www.crossref.org/AccessIndicators.xsd"
+           xmlns:rel="http://www.crossref.org/relations.xsd"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           version="5.3.1"
+           xsi:schemaLocation="http://www.crossref.org/schema/5.3.1 http://www.crossref.org/schemas/crossref5.3.1.xsd">
+  <head>
+    <doi_batch_id>20260810205325-c5235c8028c6ed8a8cd8305cf56b5f881e988d8a</doi_batch_id>
+    <timestamp>20260810205325</timestamp>
+    <depositor>
+      <depositor_name>JOSS Admin</depositor_name>
+      <email_address>admin@theoj.org</email_address>
+    </depositor>
+    <registrant>The Open Journal</registrant>
+  </head>
+  <body>
+    <journal>
+      <journal_metadata>
+        <full_title>Journal of Open Source Software</full_title>
+        <abbrev_title>JOSS</abbrev_title>
+        <issn media_type="electronic">2475-9066</issn>
+        <doi_data>
+          <doi>10.21105/joss</doi>
+          <resource>https://joss.theoj.org</resource>
+        </doi_data>
+      </journal_metadata>
+      <journal_issue>
+        <publication_date media_type="online">
+          <month>01</month>
+          <year>1970</year>
+        </publication_date>
+        <journal_volume>
+          <volume>¿VOL?</volume>
+        </journal_volume>
+        <issue>¿ISSUE?</issue>
+      </journal_issue>
+      <journal_article publication_type="full_text">
+        <titles>
+          <title>EnergyFlow.jl: Optimal-transport distances between collider events in Julia</title>
+        </titles>
+        <contributors>
+          <person_name sequence="first" contributor_role="author">
+            <given_name>Matt</given_name>
+            <surname>LeBlanc</surname>
+            <affiliations>
+              <institution><institution_name>Department of Physics, Brown University, Providence, RI, USA</institution_name></institution>
+              <institution><institution_name>The NSF AI Institute for Artificial Intelligence and Fundamental Interactions, Boston, MA, USA</institution_name></institution>
+            </affiliations>
+            <ORCID>https://orcid.org/0000-0001-5977-6418</ORCID>
+          </person_name>
+          <person_name sequence="additional"
+                       contributor_role="author">
+            <given_name>Hanting</given_name>
+            <surname>Li</surname>
+            <affiliations>
+              <institution><institution_name>Department of Physics, Brown University, Providence, RI, USA</institution_name></institution>
+            </affiliations>
+            <ORCID>https://orcid.org/0009-0000-9518-6255</ORCID>
+          </person_name>
+          <person_name sequence="additional"
+                       contributor_role="author">
+            <given_name>Haochen</given_name>
+            <surname>Wang</surname>
+            <affiliations>
+              <institution><institution_name>Department of Physics, Brown University, Providence, RI, USA</institution_name></institution>
+            </affiliations>
+            <ORCID>https://orcid.org/0009-0002-8496-2284</ORCID>
+          </person_name>
+        </contributors>
+        <publication_date>
+          <month>01</month>
+          <day>01</day>
+          <year>1970</year>
+        </publication_date>
+        <pages>
+          <first_page>¿PAGE?</first_page>
+        </pages>
+        <publisher_item>
+          <identifier id_type="doi">N/A</identifier>
+        </publisher_item>
+        <ai:program name="AccessIndicators">
+          <ai:license_ref applies_to="vor">http://creativecommons.org/licenses/by/4.0/</ai:license_ref>
+          <ai:license_ref applies_to="am">http://creativecommons.org/licenses/by/4.0/</ai:license_ref>
+          <ai:license_ref applies_to="tdm">http://creativecommons.org/licenses/by/4.0/</ai:license_ref>
+        </ai:program>
+        <rel:program>
+          <rel:related_item>
+            <rel:description>Software archive</rel:description>
+            <rel:inter_work_relation relationship-type="references" identifier-type="doi">10.5281</rel:inter_work_relation>
+          </rel:related_item>
+          <rel:related_item>
+            <rel:description>GitHub review issue</rel:description>
+            <rel:inter_work_relation relationship-type="hasReview" identifier-type="uri">https://github.com/openjournals</rel:inter_work_relation>
+          </rel:related_item>
+        </rel:program>
+        <doi_data>
+          <doi>N/A</doi>
+          <resource>https://joss.theoj.org/papers/N/A</resource>
+          <collection property="text-mining">
+            <item>
+              <resource mime_type="application/pdf">https://joss.theoj.org/papers/N/A.pdf</resource>
+            </item>
+          </collection>
+        </doi_data>
+        <citation_list>
+          <citation key="Komiske:2019fks">
+            <article_title>Metric Space of Collider Events</article_title>
+            <author>Komiske</author>
+            <journal_title>Phys. Rev. Lett.</journal_title>
+            <issue>4</issue>
+            <volume>123</volume>
+            <doi>10.1103/PhysRevLett.123.041801</doi>
+            <cYear>2019</cYear>
+            <unstructured_citation>Komiske, P. T., Metodiev, E. M., &amp; Thaler, J. (2019). Metric Space of Collider Events. Phys. Rev. Lett., 123(4), 041801. https://doi.org/10.1103/PhysRevLett.123.041801</unstructured_citation>
+          </citation>
+          <citation key="Komiske:2020qhg">
+            <article_title>The Hidden Geometry of Particle Collisions</article_title>
+            <author>Komiske</author>
+            <journal_title>JHEP</journal_title>
+            <volume>07</volume>
+            <doi>10.1007/JHEP07(2020)006</doi>
+            <cYear>2020</cYear>
+            <unstructured_citation>Komiske, P. T., Metodiev, E. M., &amp; Thaler, J. (2020). The Hidden Geometry of Particle Collisions. JHEP, 07, 006. https://doi.org/10.1007/JHEP07(2020)006</unstructured_citation>
+          </citation>
+          <citation key="Cesarotti:2020hwb">
+            <article_title>A Robust Measure of Event Isotropy at Colliders</article_title>
+            <author>Cesarotti</author>
+            <journal_title>JHEP</journal_title>
+            <volume>08</volume>
+            <doi>10.1007/JHEP08(2020)084</doi>
+            <cYear>2020</cYear>
+            <unstructured_citation>Cesarotti, C., &amp; Thaler, J. (2020). A Robust Measure of Event Isotropy at Colliders. JHEP, 08, 084. https://doi.org/10.1007/JHEP08(2020)084</unstructured_citation>
+          </citation>
+          <citation key="ATLAS-STDM-2020-20">
+            <article_title>Measurements of multijet event isotropies using optimal transport with the ATLAS detector</article_title>
+            <author>ATLAS Collaboration</author>
+            <journal_title>JHEP</journal_title>
+            <volume>10</volume>
+            <doi>10.1007/JHEP10(2023)060</doi>
+            <cYear>2023</cYear>
+            <unstructured_citation>ATLAS Collaboration. (2023). Measurements of multijet event isotropies using optimal transport with the ATLAS detector. JHEP, 10, 060. https://doi.org/10.1007/JHEP10(2023)060</unstructured_citation>
+          </citation>
+          <citation key="CMS-SMP-23-008">
+            <article_title>Measurement of event shapes in minimum-bias events from proton-proton collisions at s=13  TeV</article_title>
+            <author>CMS Collaboration</author>
+            <journal_title>Phys. Rev. D</journal_title>
+            <issue>11</issue>
+            <volume>112</volume>
+            <doi>10.1103/rqvb-gfb7</doi>
+            <cYear>2025</cYear>
+            <unstructured_citation>CMS Collaboration. (2025). Measurement of event shapes in minimum-bias events from proton-proton collisions at s=13  TeV. Phys. Rev. D, 112(11), 112006. https://doi.org/10.1103/rqvb-gfb7</unstructured_citation>
+          </citation>
+          <citation key="Flamary:2021">
+            <article_title>POT: Python Optimal Transport</article_title>
+            <author>Flamary</author>
+            <journal_title>Journal of Machine Learning Research</journal_title>
+            <issue>78</issue>
+            <volume>22</volume>
+            <cYear>2021</cYear>
+            <unstructured_citation>Flamary, R., Courty, N., Gramfort, A., Alaya, M. Z., Boisbunon, A., Chambon, S., Chapel, L., Corenflos, A., Fatras, K., Fournier, N., Gautheron, L., Gayraud, N. T. H., Janati, H., Rakotomamonjy, A., Redko, I., Rolet, A., Schutz, A., Seguy, V., Sutherland, D. J., … Vayer, T. (2021). POT: Python Optimal Transport. Journal of Machine Learning Research, 22(78), 1–8. http://jmlr.org/papers/v22/20-451.html</unstructured_citation>
+          </citation>
+          <citation key="Dezso:2011">
+            <article_title>LEMON – an Open Source C++ Graph Template Library</article_title>
+            <author>Dezső</author>
+            <journal_title>Electronic Notes in Theoretical Computer Science</journal_title>
+            <issue>5</issue>
+            <volume>264</volume>
+            <doi>10.1016/j.entcs.2011.06.003</doi>
+            <cYear>2011</cYear>
+            <unstructured_citation>Dezső, B., Jüttner, A., &amp; Kovács, P. (2011). LEMON – an Open Source C++ Graph Template Library. Electronic Notes in Theoretical Computer Science, 264(5), 23–45. https://doi.org/10.1016/j.entcs.2011.06.003</unstructured_citation>
+          </citation>
+          <citation key="Kara:2022">
+            <article_title>Parallel network simplex algorithm for the minimum cost flow problem</article_title>
+            <author>Kara</author>
+            <journal_title>Concurrency and Computation: Practice and Experience</journal_title>
+            <issue>4</issue>
+            <volume>34</volume>
+            <doi>10.1002/cpe.6659</doi>
+            <cYear>2022</cYear>
+            <unstructured_citation>Kara, G., &amp; Özturan, C. (2022). Parallel network simplex algorithm for the minimum cost flow problem. Concurrency and Computation: Practice and Experience, 34(4), e6659. https://doi.org/10.1002/cpe.6659</unstructured_citation>
+          </citation>
+          <citation key="Peyre:2019">
+            <article_title>Computational Optimal Transport</article_title>
+            <author>Peyré</author>
+            <journal_title>Foundations and Trends in Machine Learning</journal_title>
+            <issue>5-6</issue>
+            <volume>11</volume>
+            <doi>10.1561/2200000073</doi>
+            <cYear>2019</cYear>
+            <unstructured_citation>Peyré, G., &amp; Cuturi, M. (2019). Computational Optimal Transport. Foundations and Trends in Machine Learning, 11(5-6), 355–607. https://doi.org/10.1561/2200000073</unstructured_citation>
+          </citation>
+          <citation key="Cuturi:2013">
+            <article_title>Sinkhorn Distances: Lightspeed Computation of Optimal Transport</article_title>
+            <author>Cuturi</author>
+            <journal_title>Advances in neural information processing systems</journal_title>
+            <volume>26</volume>
+            <cYear>2013</cYear>
+            <unstructured_citation>Cuturi, M. (2013). Sinkhorn Distances: Lightspeed Computation of Optimal Transport. Advances in Neural Information Processing Systems, 26, 2292–2300.</unstructured_citation>
+          </citation>
+          <citation key="Eschle:2023ikn">
+            <article_title>Potential of the Julia Programming Language for High Energy Physics Computing</article_title>
+            <author>Eschle</author>
+            <journal_title>Comput. Softw. Big Sci.</journal_title>
+            <issue>1</issue>
+            <volume>7</volume>
+            <doi>10.1007/s41781-023-00104-x</doi>
+            <cYear>2023</cYear>
+            <unstructured_citation>Eschle, J., &amp; others. (2023). Potential of the Julia Programming Language for High Energy Physics Computing. Comput. Softw. Big Sci., 7(1), 10. https://doi.org/10.1007/s41781-023-00104-x</unstructured_citation>
+          </citation>
+          <citation key="Bezanson:2017">
+            <article_title>Julia: A Fresh Approach to Numerical Computing</article_title>
+            <author>Bezanson</author>
+            <journal_title>SIAM Review</journal_title>
+            <issue>1</issue>
+            <volume>59</volume>
+            <doi>10.1137/141000671</doi>
+            <cYear>2017</cYear>
+            <unstructured_citation>Bezanson, J., Edelman, A., Karpinski, S., &amp; Shah, V. B. (2017). Julia: A Fresh Approach to Numerical Computing. SIAM Review, 59(1), 65–98. https://doi.org/10.1137/141000671</unstructured_citation>
+          </citation>
+        </citation_list>
+      </journal_article>
+    </journal>
+  </body>
+</doi_batch>

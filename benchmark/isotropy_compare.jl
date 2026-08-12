@@ -23,12 +23,16 @@ function parse_results(path)
         startswith(line, "|") || continue
         cells = strip.(split(line, "|"))
         cells = cells[2:end-1]                       # drop leading/trailing empties
-        length(cells) == 5 || continue
+        # The Julia table carries extra Min/Reps columns that the Python one
+        # lacks, and both files start with a 2-column environment table. Accept
+        # either result layout by position: setup/backend/time lead, mean
+        # isotropy is last. Anything narrower is the environment block.
+        length(cells) in (5, 7) || continue
         cells[1] in ("Setup", "---", ":---") && continue
         occursin("-", cells[1]) && all(c -> c in "-: ", cells[1]) && continue
         setup, backend = cells[1], cells[2]
         t = tryparse(Float64, cells[3]); t === nothing && continue
-        mean_iso = tryparse(Float64, cells[5]); mean_iso === nothing && continue
+        mean_iso = tryparse(Float64, cells[end]); mean_iso === nothing && continue
         rows[(setup, backend)] = (time_s=t, mean=mean_iso)
     end
     return rows

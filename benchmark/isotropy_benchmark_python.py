@@ -14,10 +14,14 @@
 # at numpy + pot.
 
 import os
+import sys
 import time
 
 import numpy as np
 from ot.lp import emd2
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from envinfo import print_env, write_env_block
 
 
 def load_hepmc3(filepath, maxevents=100):
@@ -187,6 +191,7 @@ def select_sphere_events(events, min_particles=2):
 
 
 def main():
+    print_env()
     path = os.path.join(os.path.dirname(__file__), '..', 'data', 'sk_example_PU.hepmc')
     events = load_hepmc3(path, 100)
     ymax = 4.0
@@ -235,6 +240,7 @@ def main():
     os.makedirs('result', exist_ok=True)
     with open('result/isotropy_python.md', 'w') as f:
         f.write("# Event Isotropy Benchmark — Python (POT ot.lp.emd2)\n\n")
+        write_env_block(f)
         ny = int(np.floor(ymax * 16 / np.pi))
         f.write(f"ring: N points in phi, (pi/(pi-2))*(1-cos dphi); cylinder: 16x{ny} grid, |y| <= {ymax}\n")
         f.write("sphere: HEALPix unit sphere (192/48 points), 2*(1-cos theta) on 3-momentum directions\n\n")

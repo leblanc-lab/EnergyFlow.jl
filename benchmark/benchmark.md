@@ -17,6 +17,45 @@
   `EnergyFlow` (`conda activate wasserstein`; for `wasserstein` we recommend a
   Linux/Windows system). The pairwise benchmark no longer needs them.
 - Test data: `EnergyFlow.jl/data/event0_n*.csv` and `sk_example_PU.hepmc`
+- **matplotlib** in the same venv if you want to regenerate the paper figure
+  (`pip install matplotlib`); nothing else needs it.
+
+## Provenance and timing methodology
+
+Every result file opens with an `## Environment` table recording the CPU model,
+core count, OS, Julia/Python and package versions, thread count, git commit
+(flagged if the working tree was dirty), and SLURM job details when present.
+This is written by `envinfo.jl` / `envinfo.py`, which every benchmark script
+calls — a timing table without the machine it ran on is not reproducible.
+
+Two rules apply to every timing:
+
+- **Each backend is warmed up individually before it is timed.** Julia compiles
+  on first call, so warming up only the default backend — as these scripts did
+  previously — makes every *other* backend report its compilation as though it
+  were solve time. This was worth several tens of milliseconds on the small
+  isotropy workloads, enough to invert some Julia-vs-POT comparisons.
+- **Every point is a median over repetitions**, not a single measurement, with
+  the repetition count chosen adaptively so each point gets a fixed timing
+  budget regardless of problem size. Both the median and the minimum are
+  reported so an outlier-prone point is visible as a gap between them.
+
+## Everything at once
+
+`run_scaling_benchmarks.sh` runs the whole set — both single-pair benchmarks,
+the pairwise benchmark swept over thread counts, event isotropy, the comparison
+tables, and the paper figure:
+
+```bash
+cd EnergyFlow.jl/benchmark
+./run_scaling_benchmarks.sh              # laptop
+sbatch run_scaling_benchmarks.sh         # SLURM, requests an exclusive node
+```
+
+It reads `JULIA`, `PYTHON`, `VENV`, and `THREAD_COUNTS` from the environment if
+you need to override them. On a batch system it requests the node exclusively:
+the thread-scaling measurement is meaningless if other jobs share the cores.
+The remaining sections describe running each piece individually.
 
 ## Run the full benchmark suite
 
@@ -61,22 +100,50 @@ julia --project=. emds_compare.jl
 julia --project=. isotropy_compare.jl
 ```
 
-## Single-pair EMD Benchmark
+## Single-pair EMD scaling benchmark
 
-For the single-pair EMD benchmark, julia was run with 1000 rep, and 10 for python. Also, the benchmark scripts is written in Jupyter notebook for better visualization of results. It can also run in pure Julia / Python scripts.
+Times one EMD between two events of equal multiplicity, sweeping n from 2 to
+3000 over the `data/event{0,1}_n*.csv` samples. This produces panel (a) of the
+paper figure. Use the scripts rather than the notebooks for anything you intend
+to publish: they warm up each backend individually and report medians, and they
+run unattended on a batch node.
 
-### Julia (run in EnergyFlow.jl/benchmark/)
 ```bash
 cd EnergyFlow.jl/benchmark
-julia single_emd_benchmark.ipynb   # or open in Jupyter
+julia --project=. single_emd_benchmark.jl        # -> result/single_emd_julia.md
+source .venv-iso/bin/activate
+python single_emd_benchmark_python.py            # -> result/single_emd_python.md
 ```
 
-### Python (run in EnergyFlow.jl/benchmark/)
+The Python side times up to three implementations: POT's `ot.lp.emd2` called
+directly (the like-for-like solver comparison), Python EnergyFlow's `emd_pot`
+(what an analysis actually pays per call, wrapper included), and the
+`wasserstein` C++ library. The latter two are optional — if `energyflow` or
+`wasserstein` is not installed the script says so and skips that curve, so this
+runs in the plain numpy + POT venv.
+
+For a quick check without the expensive large-n points:
+
+```bash
+ENERGYFLOW_BENCH_SIZES=2,10,50 ENERGYFLOW_BENCH_TARGET=0.3 julia --project=. single_emd_benchmark.jl
+```
+
+The older `single_emd_benchmark*.ipynb` notebooks remain for interactive
+exploration; they sweep asymmetric event sizes the scripts do not.
+
+## Paper figure
+
 ```bash
 cd EnergyFlow.jl/benchmark
-conda activate wasserstein
-jupyter notebook single_emd_benchmark_python.ipynb
+python scaling_plot.py                           # -> paper/scaling.png
 ```
+
+Two panels: (a) single-pair time against multiplicity, log-log, all
+implementations; (b) pairwise wall time against Julia thread count, with the
+single-threaded POT time as a reference line and ideal linear scaling as a
+guide. Panel (b) needs at least two `result/emds_julia_t{N}.md` files and is
+omitted otherwise, so the figure still builds from a laptop run. Point it at an
+archived result set with `ENERGYFLOW_RESULT_DIR=/path/to/result`.
 
 ## Pairwise EMD Benchmark
 
@@ -90,6 +157,11 @@ calls POT's exact solver (`ot.lp.emd2`) directly — numpy + pot only, no
 cd EnergyFlow.jl/benchmark
 julia --project=. emds_benchmark.jl          # single thread; add -t 8 for 8 threads
 ```
+
+Each run writes a thread-tagged `result/emds_julia_t{N}.md`, so sweeping thread
+counts accumulates results instead of overwriting them (this feeds panel (b) of
+the paper figure). A single-threaded run additionally writes the untagged
+`result/emds_julia.md` that `emds_compare.jl` reads.
 
 ### Python (POT)
 ```bash
@@ -162,12 +234,16 @@ python EnergyFlow.jl/test/pot_reference.py
 
 ## Results
 
-All results are saved to `EnergyFlow.jl/benchmark/result/`:
-- `single_emd_julia.md` — Julia single-pair timings
-- `single_emd_python.md` — Python single-pair timings
-- `emds_julia.md` — Julia pairwise timings
+All results are saved to `EnergyFlow.jl/benchmark/result/`, each with an
+`## Environment` provenance table:
+- `single_emd_julia.md` — Julia single-pair scaling timings
+- `single_emd_python.md` — Python single-pair scaling timings (POT / EnergyFlow / wasserstein)
+- `emds_julia_t{N}.md` — Julia pairwise timings, per thread count N
+- `emds_julia.md` — Julia pairwise timings, single-threaded (read by `emds_compare.jl`)
 - `emds_python.md` — POT pairwise timings
 - `emds_compare.md` — Julia (`:ns64`, `:ot64`) vs POT pairwise, side by side
 - `isotropy_julia_t{N}.md` — Julia event-isotropy timings + mean values, per thread count N
 - `isotropy_python.md` — POT event-isotropy timings + mean values
 - `isotropy_compare.md` — Julia (`:ns64`, `:ot64`) vs POT isotropy, single- and multi-thread rows
+
+The paper figure is written outside this directory, to `paper/scaling.png`.

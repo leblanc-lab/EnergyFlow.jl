@@ -1,0 +1,134 @@
+---
+title: 'EnergyFlow.jl: Optimal-transport distances between collider events in Julia'
+tags:
+  - Julia
+  - high energy physics
+  - collider physics
+  - optimal transport
+  - Energy Mover's Distance
+authors:
+  - name: Matt LeBlanc
+    orcid: 0000-0001-5977-6418
+    corresponding: true
+    affiliation: "1, 2"
+  - name: Hanting Li
+    orcid: 0009-0000-9518-6255
+    affiliation: 1
+  - name: Haochen Wang
+    orcid: 0009-0002-8496-2284
+    affiliation: 1
+affiliations:
+  - name: Department of Physics, Brown University, Providence, RI, USA
+    index: 1
+  - name: The NSF AI Institute for Artificial Intelligence and Fundamental Interactions, Boston, MA, USA
+    index: 2
+date: 10 August 2026
+bibliography: paper.bib
+---
+
+# Summary
+
+The Energy Mover’s Distance (EMD) [@Komiske:2019fks] provides a geometric way to compare collider events. An event is represented as a discrete distribution of energy or transverse momentum over a space of particle directions. The distance between two events is the minimum transport cost required to rearrange one distribution into the other, where the cost is the amount of energy moved multiplied by a chosen function of the angular distance. For normalized events, this construction is a discrete optimal-transport or Wasserstein distance [@Peyre:2019]. This approach is inspired by the Earth Mover’s Distance used in computer vision and image processing [@Rubner:2000], and it generalizes the concept of event-shape observables to a continuous space of possible measurements.
+
+Equipped with a metric, a sample of collider events forms a metric space, within which nearest-neighbor classification, clustering, dimensional reduction, and visualization are all well defined [@Komiske:2019fks]. The EMD has been applied to jet substructure, event-shape observables, anomaly detection, and studies of the geometry of collider data [@Komiske:2020qhg; @Cesarotti:2020hwb]. A single efficient EMD implementation, therefore, supports a wide range of collider physics applications.
+
+EnergyFlow.jl is a Julia package for computing the EMD between collider events. It provides exact network-simplex solvers in Float64 and Float32, an approximate entropy-regularized Sinkhorn solver [@Cuturi:2013], and several ground metrics for collider and more general data. These include Euclidean distance, a periodic metric on the $(y,\phi)$ or $(\eta,\phi)$ plane, precomputed cost matrices, and user-defined metrics. The package supports single-pair and multithreaded pairwise calculations, together with workspace-reusing interfaces for repeated computations. Finally, it implements event isotropy [@Cesarotti:2020hwb], an event-shape observable that compares a collider event with a quasi-uniform reference distribution that has been measured at the LHC [@ATLAS-STDM-2020-20; @CMS-SMP-23-008].
+
+
+# Statement of need
+
+Optimal-transport observables can be computationally demanding. The cost of each transport problem  increases quickly with particle multiplicity, and applications requiring pairwise distance calculations scale quadratically with the number of events. Efficient solvers, memory reuse, and parallel execution are therefore important for applying the EMD to realistic collider datasets.
+
+The established Python EnergyFlow package introduced widely used interfaces for collider EMD calculations [@Komiske:2019fks]. Its transport calculations use compiled implementations provided by packages such as wasserstein and the Python Optimal Transport library (POT) [@Flamary:2021], which provide high-performance implementations and a mature ecosystem. Researchers working primarily in Julia have lacked a native implementation that can be inspected, extended, and integrated directly with Julia analysis code. Modifying low-level solver behavior or introducing specialized distance calculations may otherwise require crossing language boundaries or developing additional compiled extensions.
+
+EnergyFlow.jl fills a gap in the growing Julia high-energy-physics software ecosystem [@Eschle:2023ikn] by providing native optimal-transport tools designed around collider-event data. It contains a native Julia implementation of the complete calculation, including the network-simplex solver. Julia provides high-level language features while compiling specialized numerical code to native instructions [@Bezanson:2017]. As a result, solver implementation, ground-distance definitions, event processing, and user-facing analysis code can be developed within the same language and type system.
+
+The network-simplex implementation is based on LEMON [@Dezso:2011]. It uses a block-search pivot rule, an epsilon-scaled optimality criterion, succ_num-based least-common-ancestor calculations, and incremental updates of the spanning-tree representation. The :ot64 and :ot32 backends additionally use an arc-mixing strategy intended to improve pivot selection for degenerate or unbalanced transport problems. An experimental parallel block-search mode follows the approach of Kara and Özturan [@Kara:2022].
+
+For ensembles of events, the package parallelizes over independent event pairs using Julia tasks. A block-cyclic work assignment distributes consecutive groups of pairs among tasks. This scheduling strategy is intended to improve load balance when event multiplicity varies across the dataset. The package provides reusable workspaces that reduce memory allocation when many related transport problems are solved.
+
+
+# Verification and performance
+
+The implementation is tested using problems with analytically known solutions and comparisons with independent optimal-transport software. The test suite compares the exact EnergyFlow.jl backends with the exact solver provided by POT [@Flamary:2021]. Tests cover normalized and unnormalized event weights, multiple ground metrics, both floating-point precisions, pairwise result ordering, and transport-plan marginals. The event-isotropy implementation is also compared with the Python reference implementation on simulated collider events. The Sinkhorn backend is tested separately because it solves an entropy-regularized approximation and is not expected to reproduce the exact network-simplex result at finite regularization strength.
+
+The repository includes reproducible benchmarks for pairwise EMD and event-isotropy calculations. In the pairwise benchmark, the package computes 900 and 2500 event pairs drawn from a HepMC3 sample of simulated minimum-bias LHC collisions. On a single CPU thread, the Julia network-simplex backends achieve between 0.85 and 1.2 times the throughput of POT, depending on the ground metric, weight-normalization setting, and selected backend. The arc-mixing backend performs particularly well for unnormalized events with unequal total weights.
+
+Pairwise calculations also benefit from task-level parallelism. In the event-isotropy benchmark, execution with eight Julia threads gives an end-to-end throughput between 1.6 and 5 times that of the single-threaded POT reference calculation across the ring, cylinder, and spherical reference geometries. These results are workload- and hardware-dependent and should not be interpreted as universal performance ratios.
+
+All Julia and Python benchmark scripts are included in the repository. The benchmark documentation records the processor model, operating system, Julia and Python versions, package versions, thread configuration, input sample, and commands needed to reproduce the reported measurements.
+
+
+# Example usage
+
+Collider events are represented as matrices with one particle per row. The first column contains the particle weight—typically transverse momentum or energy—and the remaining columns contain coordinates in the ground space. For example, events in the rapidity–azimuth plane use rows of the form $(p_T, y, \phi)$.
+
+```julia
+sing EnergyFlow
+
+events = load_hepmc3_events("events.hepmc"; maxevents=100)
+
+# Compute the EMD between two events, treating azimuth as periodic.
+distance = emd(
+    events[1],
+    events[2];
+    backend=:ns64,
+    metric=EtaPhiMetric(),
+    R=1.0,
+    beta=1.0,
+    norm=false,
+)
+
+# Compute all n(n-1)/2 distances among the loaded events.
+distances = emds(
+    events;
+    backend=:ot64,
+    metric=EtaPhiMetric(),
+    R=1.0,
+    beta=1.0,
+    norm=false,
+)
+```
+
+The first call computes one EMD using the Float64 network-simplex backend. The second computes the strict upper triangle of the pairwise distance matrix and returns it as a vector in SciPy pdist order. Pairwise calculations are distributed across the available Julia threads.
+
+For repeated single-pair calculations, a reusable workspace reduces memory allocation:
+
+```julia
+max_particles = maximum(size(event, 1) for event in events)
+
+workspace = EMDWorkspace(
+    max_particles,
+    max_particles;
+    R=1.0,
+    beta=1.0,
+    norm=false,
+    metric=EtaPhiMetric(),
+)
+
+distance = emd!(
+    workspace,
+    events[1],
+    events[2];
+    backend=:ns64,
+)
+```
+
+Julia must be started with multiple threads, for example julia --threads=auto, for the pairwise calculation to use more than one thread.
+
+# Availability and documentation
+
+EnergyFlow.jl is released under the MIT license and is developed openly at https://github.com/leblanc-lab/EnergyFlow.jl. The documentation is available at https://leblanc-lab.github.io/EnergyFlow.jl/stable and includes installation instructions, a getting-started guide, a tutorial using collider events, descriptions of the available solver backends and ground metrics, and a complete API reference.
+
+The repository also includes runnable examples of single-pair and pairwise EMD calculations and event-isotropy calculations, provided as scripts, notebooks, and step-by-step walkthroughs.
+
+# Acknowledgements
+
+This material is based on work supported by the U.S. Department of Energy, Office of Science, Office of High Energy Physics under Award Number DE-SC0026285.
+
+This work is supported by the National Science Foundation under Cooperative Agreement PHY-2019786 (The NSF AI Institute for Artificial Intelligence and Fundamental Interactions, http://iaifi.org/).
+
+This research was conducted using computational resources and services at the Center for Computation and Visualization, Brown University; it also received support from the Brown University Undergraduate Teaching and Research Awards (UTRA) program and from a Brown University Data Science Institute seed grant.
+
+# References
+
