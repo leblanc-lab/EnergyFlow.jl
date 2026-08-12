@@ -73,7 +73,18 @@ JULIA="${JULIA:-julia}"
 PYTHON_SET_BY_CALLER=0
 [[ -n "${PYTHON:-}" ]] && PYTHON_SET_BY_CALLER=1
 PYTHON="${PYTHON:-python}"
-VENV="${VENV:-.venv-iso}"
+
+# The venv may sit in the benchmark directory or at the repository root,
+# depending on where it was created. Look in both rather than assuming.
+if [[ -z "${VENV:-}" ]]; then
+    for _candidate in ".venv-iso" "${REPO_ROOT}/.venv-iso"; do
+        if [[ -d "${_candidate}" ]]; then
+            VENV="${_candidate}"
+            break
+        fi
+    done
+    VENV="${VENV:-.venv-iso}"
+fi
 
 # How many CPUs this process may actually use. `nproc` reports the affinity
 # mask, so under SLURM it reflects the cgroup the job was placed in rather than
@@ -130,6 +141,22 @@ echo "Max threads:    ${MAX_THREADS}"
 echo "Thread counts:  ${THREAD_COUNTS}"
 echo
 
+# Run a benchmark step without letting one failure abandon the rest of the job.
+# The steps are largely independent — a broken Python dependency should not cost
+# you the Julia thread sweep after it has already been queued for hours — so
+# failures are recorded and reported at the end instead of aborting immediately.
+FAILED_STEPS=()
+run_step() {
+    local label="$1"
+    shift
+    if "$@"; then
+        return 0
+    fi
+    echo "WARNING: step failed and was skipped: ${label}"
+    FAILED_STEPS+=("${label}")
+    return 0
+}
+
 echo "=== Instantiating Julia benchmark environment ==="
 # Absolute path, so this cannot depend on the working directory.
 ${JULIA} --project=. -e "using Pkg; Pkg.develop(path=raw\"${REPO_ROOT}\"); Pkg.instantiate()"
@@ -147,35 +174,41 @@ fi
 echo
 
 echo "=== Single-pair scaling (figure panel a) ==="
-${JULIA} --project=. single_emd_benchmark.jl
-${PYTHON} single_emd_benchmark_python.py
+run_step "single-pair Julia"  ${JULIA} --project=. single_emd_benchmark.jl
+run_step "single-pair Python" ${PYTHON} single_emd_benchmark_python.py
 echo
 
 echo "=== Pairwise EMD across thread counts (figure panel b) ==="
 for t in ${THREAD_COUNTS}; do
     echo "--- ${t} thread(s) ---"
-    ${JULIA} --project=. -t "${t}" emds_benchmark.jl
+    run_step "pairwise Julia (${t} threads)" ${JULIA} --project=. -t "${t}" emds_benchmark.jl
 done
-${PYTHON} emds_benchmark_python.py
+run_step "pairwise Python" ${PYTHON} emds_benchmark_python.py
 echo
 
 echo "=== Event isotropy (paper table) ==="
 for t in 1 8; do
     if (( t <= MAX_THREADS )); then
         echo "--- ${t} thread(s) ---"
-        ${JULIA} --project=. -t "${t}" isotropy_benchmark.jl
+        run_step "isotropy Julia (${t} threads)" ${JULIA} --project=. -t "${t}" isotropy_benchmark.jl
     fi
 done
-${PYTHON} isotropy_benchmark_python.py
+run_step "isotropy Python" ${PYTHON} isotropy_benchmark_python.py
 echo
 
 echo "=== Comparison tables ==="
-${JULIA} --project=. emds_compare.jl
-${JULIA} --project=. isotropy_compare.jl
+run_step "emds_compare"     ${JULIA} --project=. emds_compare.jl
+run_step "isotropy_compare" ${JULIA} --project=. isotropy_compare.jl
 echo
 
 echo "=== Figure ==="
-${PYTHON} scaling_plot.py
+run_step "scaling_plot" ${PYTHON} scaling_plot.py
 
 echo
+if (( ${#FAILED_STEPS[@]} > 0 )); then
+    echo "Completed with ${#FAILED_STEPS[@]} failed step(s):"
+    printf '  - %s\n' "${FAILED_STEPS[@]}"
+    echo "Everything else finished; results are in benchmark/result/."
+    exit 1
+fi
 echo "Done. Figure: paper/scaling.png; tables: benchmark/result/"
