@@ -59,14 +59,14 @@ end
 end
 
 @testset "EMDSolver tiny nonzero imbalances" begin
-    coords0 = reshape([0.0], 1, 1)
-    coords1 = reshape([0.0], 1, 1)
-
     val_ns = emd_ns64([1e-12 0.0], [2e-12 0.0]; beta=1.0, R=1.0, norm=false)
+    val_ns32 = emd_ns32([Float32(1e-12) Float32(0.0)], [Float32(2e-12) Float32(0.0)];
+                        beta=1.0, R=1.0, norm=false)
     val_sk = emd_sinkhorn([1e-12 0.0], [2e-12 0.0]; beta=1.0, R=1.0, norm=false,
                           epsilon=1e-6, max_iter_sinkhorn=10_000)
 
     @test val_ns ≈ 1e-12 atol=1e-20
+    @test Float64(val_ns32) ≈ 1e-12 atol=1e-20
     @test val_sk ≈ 1e-12 atol=1e-20
 end
 
