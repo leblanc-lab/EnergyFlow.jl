@@ -46,10 +46,9 @@ SinkhornWorkspace
 ## Event I/O
 
 ```@docs
+EnergyFlow.HepMC3
 EnergyFlow.load_hepmc3_events
 load_hepmc3_momenta
-load_root_events
-load_root_momenta
 ```
 
 ## Event Isotropy
