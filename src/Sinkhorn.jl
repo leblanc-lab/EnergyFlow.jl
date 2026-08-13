@@ -314,8 +314,17 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
                              weights1::AbstractVector{V}, coords1::AbstractMatrix{V}) where V
     n0 = length(weights0)
     n1 = length(weights1)
+
+    if n0 == 0 || n1 == 0
+        return zero(V), :optimal
+    end
+
     total0 = sum(weights0)
     total1 = sum(weights1)
+
+    if ws.norm && (total0 == zero(V) || total1 == zero(V))
+        return zero(V), :optimal
+    end
 
     beta = ws.beta
     R = ws.R
@@ -523,21 +532,15 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
 
     V = Float64
     _unpack(evs) = [_unpack_event(V, ev, gdim) for ev in evs]
-    tuples0 = _unpack(events0)
-
-    # Find max sizes
-    max_n0 = maximum(length(t[1]) for t in tuples0)
-    max_n1 = max_n0
-
-    if events1 !== nothing
-        tuples1 = _unpack(events1)
-        max_n1 = max(max_n1, maximum(length(t[1]) for t in tuples1))
-    end
-
-    max_n = max(max_n0, max_n1)
 
     if events1 === nothing
-        n = length(tuples0)
+        n = length(events0)
+        if n <= 1
+            return Vector{V}(undef, 0)
+        end
+        tuples0 = _unpack(events0)
+        max_n0 = maximum(length(t[1]) for t in tuples0)
+        max_n = max_n0
         npairs = n * (n - 1) ÷ 2
         results = Vector{V}(undef, npairs)
 
@@ -555,9 +558,16 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         _pairwise_parallel!(npairs, make_ws_self, work_self!)
         return results
     else
+        tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         na = length(tuples0)
         nb = length(tuples1)
+        if na == 0 || nb == 0
+            return Matrix{V}(undef, na, nb)
+        end
+        max_n0 = maximum(length(t[1]) for t in tuples0)
+        max_n1 = maximum(length(t[1]) for t in tuples1)
+        max_n = max(max_n0, max_n1)
         D = Matrix{V}(undef, na, nb)
 
         npairs = na * nb

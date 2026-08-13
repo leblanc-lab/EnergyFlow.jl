@@ -240,6 +240,14 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
     ns.next_arc    = 1
     ns.in_arc      = 1
 
+    if ns.arc_num == 0
+        ns.total_cost = zero(V)
+        ns.status = :optimal
+        ns.n_iters = 0
+        ns.n_arc_scans = 0
+        return ns.status
+    end
+
     root     = ns.node_num   # artificial root (1-indexed last node)
     arc_num  = ns.arc_num
     node_num = ns.node_num

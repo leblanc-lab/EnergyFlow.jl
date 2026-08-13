@@ -121,8 +121,16 @@ function _emd_raw!(ws::EMDWorkspace{V},
     n0 = length(weights0)
     n1 = length(weights1)
 
+    if n0 == 0 || n1 == 0
+        return zero(V), :optimal
+    end
+
     total0 = sum(weights0)
     total1 = sum(weights1)
+
+    if ws.norm && (total0 == zero(V) || total1 == zero(V))
+        return zero(V), :optimal
+    end
 
     # Determine if we need a fictitious particle
     has_fict_source = false
