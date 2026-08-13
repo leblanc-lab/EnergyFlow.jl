@@ -151,9 +151,9 @@ test_log("="^70)
             @test emd(empty_ev, empty_ev; backend=:ns64, norm=true) == 0.0
             @test emd(empty_ev, empty_ev; backend=:ns64, norm=false) == 0.0
             @test emd(empty_ev, nonempty_ev; backend=:ns64, norm=true) == 0.0
-            @test emd(empty_ev, nonempty_ev; backend=:ns64, norm=false) == 0.0
+            @test emd(empty_ev, nonempty_ev; backend=:ns64, norm=false) ≈ 1.0 atol=1e-12
             @test emd(nonempty_ev, empty_ev; backend=:ns64, norm=true) == 0.0
-            @test emd(nonempty_ev, empty_ev; backend=:ns64, norm=false) == 0.0
+            @test emd(nonempty_ev, empty_ev; backend=:ns64, norm=false) ≈ 1.0 atol=1e-12
 
             empty_events = Vector{Matrix{Float64}}()
             @test isempty(emds(empty_events; backend=:ns64))

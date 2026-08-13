@@ -121,7 +121,7 @@ function _emd_raw!(ws::EMDWorkspace{V},
     n0 = length(weights0)
     n1 = length(weights1)
 
-    if n0 == 0 || n1 == 0
+    if n0 == 0 && n1 == 0
         return zero(V), :optimal
     end
 
