@@ -43,8 +43,9 @@ Two rules apply to every timing:
 ## Everything at once
 
 `run_scaling_benchmarks.sh` runs the whole set — both single-pair benchmarks,
-the pairwise benchmark swept over thread counts, event isotropy, the comparison
-tables, and the paper figure:
+the pairwise benchmark swept over thread counts and again over matrix size,
+event isotropy, the Sinkhorn accuracy sweep, the comparison tables, and both
+paper figures:
 
 ```bash
 cd EnergyFlow.jl/benchmark
@@ -55,7 +56,17 @@ sbatch run_scaling_benchmarks.sh         # SLURM, requests an exclusive node
 It reads `JULIA`, `PYTHON`, `VENV`, and `THREAD_COUNTS` from the environment if
 you need to override them. On a batch system it requests the node exclusively:
 the thread-scaling measurement is meaningless if other jobs share the cores.
-The remaining sections describe running each piece individually.
+
+Individual groups take hours, so `BENCH_ONLY` re-runs a subset rather than the
+whole job — after fixing one benchmark, or when only the figures need rebuilding:
+
+```bash
+BENCH_ONLY="sinkhorn figure" sbatch run_scaling_benchmarks.sh
+```
+
+Valid groups are `single`, `pairwise`, `pairs`, `large`, `isotropy`, `sinkhorn`,
+`tables`, and `figure`; an unrecognized name is an error rather than a silently
+empty run. The remaining sections describe running each piece individually.
 
 ## Run the full benchmark suite
 
@@ -149,6 +160,40 @@ Panel (b) of the figure overlays the two. POT still appears, drawn as a
 horizontal reference line rather than a curve, and is a fair comparison only
 against the single-thread point.
 
+## Pairwise scaling in matrix size
+
+The thread sweep above fixes the workload at 2500 pairs and varies parallelism.
+This sweep does the opposite — fixed thread count, matrices from ~5k to ~3.9M
+pairs — which is the axis you extrapolate along when sizing a real run:
+
+```bash
+cd EnergyFlow.jl/benchmark
+julia --project=. make_large_sample.jl 2800 result/scaling_sample.csv
+julia --project=. -t 48 pairs_scaling_benchmark.jl       # -> result/pairs_scaling_julia_t48.md
+python wass_pairwise_benchmark.py --threads 48 \
+    --sample result/scaling_sample.csv \
+    --sizes 100,200,350,500,700,1000,1400,2000,2800      # -> result/pairs_scaling_wass_t48.md
+```
+
+Both halves take *prefixes* of one sample rather than generating their own, so
+the size-N run in each language solves byte-identical problems.
+`make_large_sample.jl` draws from a seeded stream in order, which is what makes
+prefixes well defined: the first N events of the 2800-event sample are identical
+to a freshly generated N-event one. The second argument keeps this sample
+separate from `large_sample.csv`, so the large-matrix benchmark below is
+unaffected.
+
+The result table reports pairs per second. A constant rate means wall time is
+linear in the pair count, which is what an embarrassingly parallel workload
+should give once the matrix is big enough to keep every thread fed; the
+informative part is the small-matrix end, where fixed overhead and load
+imbalance across uneven multiplicities pull the rate below its asymptote.
+`ENERGYFLOW_PAIRS_SIZES` (Julia) and `--sizes` (Python) override the sweep and
+must be given the same values. Points over 30 s report a single timed run after
+a warmup instead of a median over three, on both sides.
+
+This feeds panel (c) of `paper/scaling.png`.
+
 ## Large distance matrix
 
 The HepMC sample holds 100 events, capping a pairwise matrix at 100×100.
@@ -174,19 +219,130 @@ so the per-pair advantage at 500k pairs is the same as at 2500 pairs — the
 ratio does not improve with matrix size. What a large matrix demonstrates is
 absolute tractability at the scale analyses actually use.
 
-## Paper figure
+## Sinkhorn accuracy vs cost
+
+The `:sinkhorn` backend solves the entropy-regularised problem, so a timing of
+it means nothing without the error of the value that timing bought. This sweep
+records both, over regularisation strength ε and multiplicity n, scoring every
+Sinkhorn value against the exact solve of the same problem:
+
+```bash
+cd EnergyFlow.jl/benchmark
+julia --project=. sinkhorn_benchmark.jl          # -> result/sinkhorn_julia.md
+source .venv-iso/bin/activate
+python sinkhorn_benchmark_python.py              # -> result/sinkhorn_python.md
+python sinkhorn_plot.py                          # -> paper/sinkhorn.png
+```
+
+The POT half runs `ot.sinkhorn2(method='sinkhorn_log')` — POT's log-domain
+implementation, the same formulation as `src/Sinkhorn.jl`, and the one that does
+not underflow at these ε values. It answers the question the Julia timings alone
+cannot: where the approximate backend is slower than the exact one, this
+separates "this implementation" from "Sinkhorn". Both return ⟨γ, C⟩ with no
+entropic term, and converged values agree to ~8 significant figures.
+
+Two things the sweep is careful about, both of which change the conclusion if
+ignored:
+
+- **Convergence is recorded, not assumed.** At the 5000-iteration default, every
+  point below ε ≈ 0.01 stops early, and an unconverged run reports a cost that
+  is too *low* — the iterates never reached a feasible plan. Read naively that
+  looks like accuracy improving with ε and then degrading, when it is only the
+  iteration cap. These scripts use `max_iter = 100000`, flag any point that
+  still hits it, and the figure draws those hollow.
+- **The reference is the exact solve of the same problem.** Relative errors
+  reach ~1e-5, far below the level at which a hardcoded reference would hold.
+
+The sweep is a bounded grid: the full ε sweep at `ENERGYFLOW_SINKHORN_EPS_SIZES`
+(default 50, 100, 200) and an n sweep at ε ∈ {0.05, 0.01} over
+`ENERGYFLOW_SINKHORN_SIZES` (default 10 … 500). A full cross product is not run —
+cost grows as n² per iteration *and* the iteration count grows as ε falls, so
+the expensive corner would dominate the job for points no figure needs.
+`ENERGYFLOW_SINKHORN_EPS` and `ENERGYFLOW_SINKHORN_MAXITER` override the ε grid
+and the cap; both scripts read the same variables and must be given the same
+values, since the two halves share the figure's axes.
+
+Because this sweep runs one backend rather than several, compilation is warmed
+up once at startup instead of per point, and solves over 10 s report their pilot
+measurement rather than repeating a two-minute call to get the same number.
+
+## Network-simplex pivot rules
+
+Compares the three entering-arc rules in `NetworkSimplex.jl`: `:serial` (block
+search, the default), `:parallel_block` (the Kara & Özturan scheme), and
+`:full_parallel` (parallel Dantzig, documented in the source as a
+correctness/performance baseline rather than a production mode).
+
+```bash
+cd EnergyFlow.jl/benchmark
+for t in 1 2 4 8 16 32 48; do
+    julia --project=. -t $t pivot_benchmark.jl     # -> result/pivot_julia_t$t.md
+done
+python pivot_plot.py                               # -> paper/pivot.png
+```
+
+Two things about the setup are deliberate.
+
+**It measures single-pair solves, not pairwise.** Parallel pivoting parallelises
+*within* one solve, while `emds` already gets embarrassing parallelism *across*
+pairs. Running both would oversubscribe the machine and measure scheduler
+contention rather than either scheme, so the regime tested is the only one where
+a parallel pivot rule can help: a single solve large enough that one
+entering-arc search is worth splitting.
+
+**It reaches into the struct.** `pivot_mode` is not exposed through `emd`/`emds`
+— those build their workspaces internally — so the benchmark sets
+`ws.ns.pivot_mode` on an explicit `EMDWorkspace`, as `test/test_emdsolver.jl`
+does. There is currently no way to select a pivot rule for a *pairwise*
+calculation at all.
+
+Report both columns the result table gives you, because they disagree. `Iters`
+is the pivot count, which is the algorithmic claim and is free of any threading
+effect: a rule reaching the same optimum in fewer pivots is choosing better
+entering arcs. Wall time is whether those choices paid for themselves.
+`ArcScans` is not instrumented for `:parallel_block` and reports 0 there rather
+than a measurement. `ENERGYFLOW_PIVOT_SIZES` overrides the multiplicities, and
+`ENERGYFLOW_PIVOT_FULLMAX` (default 1000) caps `:full_parallel`, whose cost
+grows as arcs × pivots with no block to bound the scan — at n = 1000 one solve
+is already 4.4 billion arc evaluations.
+
+## Paper figures
 
 ```bash
 cd EnergyFlow.jl/benchmark
 python scaling_plot.py                           # -> paper/scaling.png
+python sinkhorn_plot.py                          # -> paper/sinkhorn.png
+python isotropy_plot.py                          # -> paper/isotropy.png
+python pivot_plot.py                             # -> paper/pivot.png
 ```
 
-Two panels: (a) single-pair time against multiplicity, log-log, all
-implementations; (b) pairwise wall time against Julia thread count, with the
-single-threaded POT time as a reference line and ideal linear scaling as a
-guide. Panel (b) needs at least two `result/emds_julia_t{N}.md` files and is
-omitted otherwise, so the figure still builds from a laptop run. Point it at an
-archived result set with `ENERGYFLOW_RESULT_DIR=/path/to/result`.
+`scaling.png` has three panels: (a) single-pair time against multiplicity,
+log-log, all implementations; (b) pairwise wall time against Julia thread count,
+with the single-threaded POT time as a reference line and ideal linear scaling
+as a guide; (c) pairwise wall time against matrix size at fixed thread count,
+against linear growth. Each panel is omitted if its inputs are missing — (b)
+needs at least two `result/emds_julia_t{N}.md` files, (c) needs
+`result/pairs_scaling_*.md` — so the figure still builds from a laptop run or
+from one benchmark rerun on its own.
+
+`sinkhorn.png` has three: (a) relative error against ε, with POT's Sinkhorn
+overlaid to show the two implementations agree on the values being timed;
+(b) wall time against the accuracy achieved at one multiplicity, with both exact
+solvers as reference lines; (c) time against multiplicity at fixed ε. It builds
+from `result/sinkhorn_julia.md` alone, omitting the POT comparison with a note.
+
+`isotropy.png` has three: (a) wall time per reference geometry for each backend
+and POT; (b) speedup over the single-threaded POT reference at each Julia thread
+count; (c) `|mean isotropy − POT|` per backend and geometry, the panel that says
+whether a timing was earned on the right answer. It prints any backend/geometry
+pair disagreeing by more than 1e-6 — these are exact solvers on identical
+problems, so a nonzero difference in a Float64 backend is a solver defect rather
+than a tolerance, and the Float32 backends should show a precision-limited
+staircase that grows with problem size and nothing more.
+
+Both scripts take `--output` and `--dpi`, warn if their inputs came from more
+than one machine, and read an archived result set via
+`ENERGYFLOW_RESULT_DIR=/path/to/result`.
 
 ## Pairwise EMD Benchmark
 
@@ -288,5 +444,11 @@ All results are saved to `EnergyFlow.jl/benchmark/result/`, each with an
 - `isotropy_julia_t{N}.md` — Julia event-isotropy timings + mean values, per thread count N
 - `isotropy_python.md` — POT event-isotropy timings + mean values
 - `isotropy_compare.md` — Julia (`:ns64`, `:ot64`) vs POT isotropy, single- and multi-thread rows
+- `sinkhorn_julia.md` — Julia `:sinkhorn` time, value, relative error and convergence over (ε, n)
+- `sinkhorn_python.md` — the same sweep through POT's `ot.sinkhorn2(method='sinkhorn_log')`
+- `pairs_scaling_julia_t{N}.md` — Julia exact-backend wall time and throughput vs matrix size
+- `pairs_scaling_wass_t{N}.md` — the same sweep through `wasserstein.PairwiseEMD`
+- `pivot_julia_t{N}.md` — pivot count and wall time per entering-arc rule, per thread count
 
-The paper figure is written outside this directory, to `paper/scaling.png`.
+The paper figures are written outside this directory, to `paper/scaling.png`,
+`paper/sinkhorn.png`, `paper/isotropy.png` and `paper/pivot.png`.

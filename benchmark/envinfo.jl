@@ -34,16 +34,40 @@ function _cpu_model()
     end
 end
 
-function _git_describe()
+function _git_describe(dir = _repo_root())
     commit = _probe() do
-        readchomp(Cmd(`git rev-parse --short HEAD`; dir = _repo_root()))
+        readchomp(Cmd(`git rev-parse --short HEAD`; dir = dir))
     end
     # "dirty" flags a working tree with uncommitted changes, so a timing can
     # never be silently attributed to a commit that does not contain the code
     # that produced it.
-    dirty = _probe(() -> isempty(readchomp(Cmd(`git status --porcelain`; dir = _repo_root()))) ?
+    dirty = _probe(() -> isempty(readchomp(Cmd(`git status --porcelain`; dir = dir))) ?
                          "clean" : "dirty", "")
     return dirty == "dirty" ? commit * " (uncommitted changes)" : commit
+end
+
+"""
+    _solver_source() -> Union{Nothing,String}
+
+Where the loaded `EnergyFlow` package actually came from, reported only when it
+is not the repository these scripts live in.
+
+`Commit` above describes the benchmark scripts, which is the same thing as the
+solver only when the package is dev'd to this repository. It stops being the
+same as soon as a run points Julia at another checkout — testing a branch or a
+pull request against the current benchmark scripts, say — and at that point the
+`Commit` field alone would attribute a timing to code that did not produce it,
+which is exactly what that field exists to prevent. So this resolves the loaded
+module's own directory and reports its commit separately.
+"""
+function _solver_source()
+    _probe() do
+        isdefined(Main, :EnergyFlow) || return nothing
+        dir = pkgdir(getfield(Main, :EnergyFlow))
+        dir === nothing && return nothing
+        normpath(dir) == _repo_root() && return nothing      # the ordinary case
+        return string(dir, " @ ", _git_describe(dir))
+    end
 end
 
 function _pkg_version(name::AbstractString)
@@ -72,6 +96,10 @@ function env_pairs()
         "EnergyFlow"    => _pkg_version("EnergyFlow"),
         "Commit"        => _git_describe(),
     ]
+    # Only when the solver came from somewhere other than this repository.
+    let src = _solver_source()
+        src === nothing || push!(pairs, "Solver source" => src)
+    end
     # Present only under SLURM; on OSCAR these identify the worker node so a
     # timing can be traced back to the exact allocation that produced it.
     for (var, label) in ("SLURM_JOB_ID"      => "SLURM job",

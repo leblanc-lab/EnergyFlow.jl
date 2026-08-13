@@ -1,5 +1,5 @@
 # Build a large event sample for the large-matrix pairwise benchmark.
-# Usage: cd benchmark && julia --project=. make_large_sample.jl [nevents]
+# Usage: cd benchmark && julia --project=. make_large_sample.jl [nevents] [outfile]
 #
 # data/sk_example_PU.hepmc holds 100 events, which caps a pairwise matrix at
 # 100x100. Analyses routinely want 1000x1000 and larger, so this script builds
@@ -25,7 +25,14 @@ using Random
 
 const NEVENTS = length(ARGS) >= 1 ? parse(Int, ARGS[1]) : 1000
 const SEED    = 20260812
-const OUTFILE = joinpath(@__DIR__, "result", "large_sample.csv")
+# A second argument redirects the output, so the pairs-scaling sweep can build
+# its own (much larger) sample without redefining what large_sample.csv means
+# for the large-matrix benchmark that already reads it. Both are drawn from the
+# same seeded stream in the same order, so the first N events of a larger sample
+# are byte-identical to an N-event sample — prefixes of one file are therefore
+# valid stand-ins for separately generated samples.
+const OUTFILE = length(ARGS) >= 2 ? (isabspath(ARGS[2]) ? ARGS[2] : joinpath(@__DIR__, ARGS[2])) :
+                joinpath(@__DIR__, "result", "large_sample.csv")
 
 print_env()
 

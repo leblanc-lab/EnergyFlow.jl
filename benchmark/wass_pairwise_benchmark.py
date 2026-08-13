@@ -29,6 +29,9 @@ from envinfo import print_env, write_env_block
 from emds_benchmark_python import load_hepmc3
 
 REPS = 3
+# Matches LONG_SOLVE_SECONDS in pairs_scaling_benchmark.jl, so both halves of
+# the size sweep switch to single-run timing at the same point.
+LONG_SOLVE_SECONDS = 30.0
 
 
 def load_sample_csv(path):
@@ -45,11 +48,18 @@ def load_sample_csv(path):
     return events
 
 
-def time_pairwise(events_a, events_b, norm, threads):
+def time_pairwise(events_a, events_b, norm, threads, long_solve_seconds=None):
     """Median wall time of a full pairwise EMD via wasserstein, in seconds.
 
     `verbose=0` suppresses the per-EMD progress output, which would otherwise
     be tens of thousands of lines in a batch log.
+
+    `long_solve_seconds` enables the adaptive path used by the size sweep: past
+    that pilot time, the pilot is reported instead of running REPS repetitions,
+    because a multi-million-pair matrix takes minutes to reproduce a number that
+    is not timer-noise limited. Left as None — the default — the function keeps
+    its original fixed-REPS behaviour, so the split and large-matrix benchmarks
+    that already published numbers are measured exactly as before.
     """
     import wasserstein
 
@@ -63,6 +73,20 @@ def time_pairwise(events_a, events_b, norm, threads):
         return np.asarray(pw.emds())
 
     once()                                    # warm up: first call sets up threads
+    if long_solve_seconds is not None:
+        start = time.perf_counter()
+        once()
+        est = time.perf_counter() - start
+        if est > long_solve_seconds:
+            return est, est
+        times = [est]
+        for _ in range(REPS - 1):
+            start = time.perf_counter()
+            once()
+            times.append(time.perf_counter() - start)
+        times.sort()
+        return times[len(times) // 2], min(times)
+
     times = []
     for _ in range(REPS):
         start = time.perf_counter()
@@ -118,6 +142,41 @@ def run_large(sample_path, threads):
     return results
 
 
+def run_sizes(sample_path, sizes, threads):
+    """Self-pairwise matrices over increasing prefixes of the sample.
+
+    The Python half of pairs_scaling_benchmark.jl. Prefixes of one file rather
+    than separately generated samples, so the size-N run here and the size-N run
+    in Julia solve byte-identical problems; make_large_sample.jl draws from a
+    seeded stream in order, which is what makes prefixes well defined.
+
+    Only the normalized setup is swept: it is the one the figure plots, and the
+    unnormalized variant would double a sweep whose largest points take minutes.
+    """
+    events = load_sample_csv(sample_path)
+    available = len(events)
+    usable = [n for n in sizes if n <= available]
+    if len(usable) < len(sizes):
+        print(f'Sample holds {available} events; skipping sizes '
+              f'{[n for n in sizes if n > available]}.')
+    if not usable:
+        sys.exit(f'No requested size fits in the {available}-event sample.')
+    print(f'Loaded {available} events from {sample_path}; sweeping {usable}')
+
+    results = []
+    for n in usable:
+        subset = events[:n]
+        pairs = n * (n - 1) // 2
+        med, mn = time_pairwise(subset, None, True, threads,
+                                long_solve_seconds=LONG_SOLVE_SECONDS)
+        results.append(dict(split=f'{n}x{n}', setup='Euclidean_norm', backend='Wass',
+                            time_s=med, min_s=mn, pairs=pairs))
+        print(f'{n}x{n} Euclidean_norm     Wass  {med:9.3f} s '
+              f'(min {mn:9.3f} s, {pairs} pairs, {pairs / med:8.0f} pairs/s, '
+              f'{threads} threads)', flush=True)
+    return results
+
+
 def write_results(path, title, results, threads):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as handle:
@@ -139,7 +198,14 @@ def main():
                         help='OpenMP threads for wasserstein (match the Julia run)')
     parser.add_argument('--sample', default=None,
                         help='resampled event CSV; switches to the large-matrix run')
+    parser.add_argument('--sizes', default=None,
+                        help='comma-separated event counts; with --sample, sweeps '
+                             'self-pairwise matrices over prefixes of it instead of '
+                             'running the single large matrix')
     args = parser.parse_args()
+
+    if args.sizes and not args.sample:
+        parser.error('--sizes needs --sample to take prefixes of.')
 
     print_env()
     try:
@@ -149,7 +215,13 @@ def main():
                  'this benchmark needs it for the threaded comparison.')
 
     result_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'result')
-    if args.sample:
+    if args.sizes:
+        sizes = [int(s) for s in args.sizes.split(',')]
+        results = run_sizes(args.sample, sizes, args.threads)
+        write_results(os.path.join(result_dir, f'pairs_scaling_wass_t{args.threads}.md'),
+                      'Pairwise EMD Scaling in Pair Count — wasserstein',
+                      results, args.threads)
+    elif args.sample:
         results = run_large(args.sample, args.threads)
         write_results(os.path.join(result_dir, 'large_pairwise_python.md'),
                       'Large Pairwise EMD — wasserstein', results, args.threads)

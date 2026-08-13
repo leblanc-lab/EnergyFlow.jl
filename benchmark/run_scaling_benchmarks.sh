@@ -133,12 +133,29 @@ if [[ -z "${THREAD_COUNTS:-}" ]]; then
     fi
 fi
 
+# Which groups of steps to run. Individual groups take hours, so re-running one
+# after a fix should not mean redoing the rest: BENCH_ONLY="sinkhorn figure"
+# runs those two groups and skips everything else. Default is everything.
+ALL_GROUPS="single pairwise pairs large isotropy sinkhorn pivot tables figure"
+BENCH_ONLY="${BENCH_ONLY:-${ALL_GROUPS}}"
+
+for g in ${BENCH_ONLY}; do
+    if [[ " ${ALL_GROUPS} " != *" ${g} "* ]]; then
+        echo "ERROR: unknown group '${g}' in BENCH_ONLY." >&2
+        echo "  Valid groups: ${ALL_GROUPS}" >&2
+        exit 1
+    fi
+done
+
+want() { [[ " ${BENCH_ONLY} " == *" $1 "* ]]; }
+
 echo "=== Environment ==="
 echo "Julia:          $(${JULIA} --version)"
 echo "Benchmark dir:  ${BENCH_DIR}"
 echo "Repo root:      ${REPO_ROOT}"
 echo "Max threads:    ${MAX_THREADS}"
 echo "Thread counts:  ${THREAD_COUNTS}"
+echo "Groups:         ${BENCH_ONLY}"
 echo
 
 # Run a benchmark step without letting one failure abandon the rest of the job.
@@ -158,8 +175,25 @@ run_step() {
 }
 
 echo "=== Instantiating Julia benchmark environment ==="
+# Which checkout of the package to benchmark. Defaults to this repository, but
+# can point at another working tree — a branch or a pull request under test —
+# so a fix can be measured with the current benchmark scripts without merging
+# it first:
+#
+#   git worktree add ../EnergyFlow-pr72 pr72
+#   ENERGYFLOW_PKG_PATH=../EnergyFlow-pr72 BENCH_ONLY=isotropy sbatch run_scaling_benchmarks.sh
+#
+# envinfo.jl records a "Solver source" row whenever this is not the script
+# repository, so a result file can never misattribute a timing to the commit of
+# the scripts that produced it.
+PKG_PATH="$(cd "${ENERGYFLOW_PKG_PATH:-${REPO_ROOT}}" && pwd)"
+if [[ ! -f "${PKG_PATH}/Project.toml" ]]; then
+    echo "ERROR: no Project.toml at ENERGYFLOW_PKG_PATH=${PKG_PATH}." >&2
+    exit 1
+fi
+[[ "${PKG_PATH}" != "${REPO_ROOT}" ]] && echo "Benchmarking package from ${PKG_PATH} (not this repo)"
 # Absolute path, so this cannot depend on the working directory.
-${JULIA} --project=. -e "using Pkg; Pkg.develop(path=raw\"${REPO_ROOT}\"); Pkg.instantiate()"
+${JULIA} --project=. -e "using Pkg; Pkg.develop(path=raw\"${PKG_PATH}\"); Pkg.instantiate()"
 
 if [[ -d "${VENV}" ]]; then
     # shellcheck disable=SC1091
@@ -173,11 +207,14 @@ else
 fi
 echo
 
+if want single; then
 echo "=== Single-pair scaling (figure panel a) ==="
 run_step "single-pair Julia"  ${JULIA} --project=. single_emd_benchmark.jl
 run_step "single-pair Python" ${PYTHON} single_emd_benchmark_python.py
 echo
+fi
 
+if want pairwise; then
 echo "=== Pairwise EMD across thread counts (figure panel b) ==="
 # Julia and wasserstein are run at each thread count so the scaling comparison
 # is threaded-against-threaded. POT is measured once, single-threaded, because
@@ -190,7 +227,27 @@ for t in ${THREAD_COUNTS}; do
 done
 run_step "pairwise POT (single-threaded)" ${PYTHON} emds_benchmark_python.py
 echo
+fi
 
+if want pairs; then
+echo "=== Pairwise scaling in matrix size (figure panel c) ==="
+# Both halves sweep prefixes of one sample so each size solves byte-identical
+# problems on the two sides, and both run at the full thread count — the panel
+# varies the amount of work, holding parallelism fixed.
+PAIRS_SIZES="${PAIRS_SIZES:-100,200,350,500,700,1000,1400,2000,2800}"
+PAIRS_MAX="${PAIRS_SIZES##*,}"
+run_step "pairs scaling sample (${PAIRS_MAX} events)" \
+    ${JULIA} --project=. make_large_sample.jl "${PAIRS_MAX}" result/scaling_sample.csv
+run_step "pairs scaling Julia (${MAX_THREADS} threads)" \
+    env ENERGYFLOW_PAIRS_SIZES="${PAIRS_SIZES}" \
+    ${JULIA} --project=. -t "${MAX_THREADS}" pairs_scaling_benchmark.jl
+run_step "pairs scaling wasserstein (${MAX_THREADS} threads)" \
+    ${PYTHON} wass_pairwise_benchmark.py --threads "${MAX_THREADS}" \
+    --sample result/scaling_sample.csv --sizes "${PAIRS_SIZES}"
+echo
+fi
+
+if want large; then
 echo "=== Large distance matrix (${LARGE_NEVENTS:-1000} events, full width) ==="
 run_step "large sample generation" ${JULIA} --project=. make_large_sample.jl "${LARGE_NEVENTS:-1000}"
 run_step "large matrix Julia (${MAX_THREADS} threads)" \
@@ -198,7 +255,9 @@ run_step "large matrix Julia (${MAX_THREADS} threads)" \
 run_step "large matrix wasserstein (${MAX_THREADS} threads)" \
     ${PYTHON} wass_pairwise_benchmark.py --threads "${MAX_THREADS}" --sample result/large_sample.csv
 echo
+fi
 
+if want isotropy; then
 echo "=== Event isotropy (paper table) ==="
 for t in 1 8; do
     if (( t <= MAX_THREADS )); then
@@ -208,14 +267,46 @@ for t in 1 8; do
 done
 run_step "isotropy Python" ${PYTHON} isotropy_benchmark_python.py
 echo
+fi
 
+if want sinkhorn; then
+echo "=== Sinkhorn accuracy vs cost (sinkhorn figure) ==="
+# Single-threaded on both sides: this measures one solver against another over
+# an ε grid, and thread count is not the variable under study. The POT half is
+# the slow one — its log-domain Sinkhorn runs a few times longer than the Julia
+# half — so it goes last and a failure there still leaves a usable Julia figure.
+run_step "sinkhorn Julia"  ${JULIA} --project=. sinkhorn_benchmark.jl
+run_step "sinkhorn Python" ${PYTHON} sinkhorn_benchmark_python.py
+echo
+fi
+
+if want pivot; then
+echo "=== Network-simplex pivot rules (pivot figure) ==="
+# Julia fixes its thread count at startup, so the thread sweep is over separate
+# invocations, one result file each. Unlike the pairwise groups this measures
+# parallelism *inside* a single solve, so every thread count is meaningful even
+# though the workload is one EMD at a time.
+for t in ${THREAD_COUNTS}; do
+    echo "--- ${t} thread(s) ---"
+    run_step "pivot rules (${t} threads)" ${JULIA} --project=. -t "${t}" pivot_benchmark.jl
+done
+echo
+fi
+
+if want tables; then
 echo "=== Comparison tables ==="
 run_step "emds_compare"     ${JULIA} --project=. emds_compare.jl
 run_step "isotropy_compare" ${JULIA} --project=. isotropy_compare.jl
 echo
+fi
 
-echo "=== Figure ==="
-run_step "scaling_plot" ${PYTHON} scaling_plot.py
+if want figure; then
+echo "=== Figures ==="
+run_step "scaling_plot"  ${PYTHON} scaling_plot.py
+run_step "sinkhorn_plot" ${PYTHON} sinkhorn_plot.py
+run_step "isotropy_plot" ${PYTHON} isotropy_plot.py
+run_step "pivot_plot"    ${PYTHON} pivot_plot.py
+fi
 
 echo
 if (( ${#FAILED_STEPS[@]} > 0 )); then
@@ -224,4 +315,11 @@ if (( ${#FAILED_STEPS[@]} > 0 )); then
     echo "Everything else finished; results are in benchmark/result/."
     exit 1
 fi
-echo "Done. Figure: paper/scaling.png; tables: benchmark/result/"
+if want figure; then
+    echo "Done. Figures: paper/{scaling,sinkhorn,isotropy,pivot}.png; tables: benchmark/result/"
+else
+    # Do not advertise figures a BENCH_ONLY run never rebuilt: the ones on disk
+    # are from an earlier run and may predate the results just written.
+    echo "Done (groups: ${BENCH_ONLY}). Tables: benchmark/result/"
+    echo "Figures not rebuilt; run with BENCH_ONLY=\"... figure\" or the plot scripts directly."
+fi

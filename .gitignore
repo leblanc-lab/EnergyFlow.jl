@@ -5,7 +5,11 @@ Manifest.toml
 __pycache__
 *.pyc
 /benchmark/.venv*
+/.venv*
 /benchmark/result
+# SLURM job output from benchmark/run_scaling_benchmarks.sh, written to the
+# submission directory.
+benchmark-*.out
 *.cov
 *.info
 results*.json*

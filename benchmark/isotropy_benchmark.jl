@@ -19,6 +19,23 @@ using Statistics
 const TARGET_SECONDS = 3.0
 const MIN_REPS       = 3
 const MAX_REPS       = 2_000
+
+# Network-simplex iteration budget, passed explicitly rather than left at the
+# package default of 100_000.
+#
+# The sphere3072 setup needs more than that default: it matches ~150-particle
+# events against a 3072-point reference, and those highly asymmetric problems
+# are precisely the degenerate case the arc-mixing backends exist for. At the
+# default, 22 of the 100 events exceed the budget under `:ns64`. Before the
+# status-handling fix that produced silently wrong values — a mean isotropy of
+# 0.9721 against POT's 0.9890, and results that changed with thread count,
+# because a reused workspace makes the starting basis depend on solve order.
+# With the fix those solves return NaN and warn instead, which the guard below
+# turns into a loud failure rather than a quietly wrong table.
+#
+# 200_000 is sufficient for every setup here (0 of 100 events exceed it, and the
+# values then match `:ot64` to 2.1e-15); the default below leaves margin.
+const MAX_ITER = parse(Int, get(ENV, "ENERGYFLOW_ISOTROPY_MAXITER", "1000000"))
 # Above this per-call cost, the minimum repetition count would dominate the
 # runtime (sphere3072 takes tens of seconds per pass), and the measurement is
 # long enough that timer noise is irrelevant anyway.
@@ -82,9 +99,21 @@ for (setup_name, evs, ref, metric) in setups
         # Each backend is warmed up inside timed(), so no backend pays for its
         # own compilation in the reported number.
         med, mn, reps = timed() do
-            emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend, metric=metric)
+            emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend,
+                 metric=metric, n_iter_max=MAX_ITER)
         end
-        vals = emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend, metric=metric)
+        vals = emds(evs, [ref]; R=1.0, beta=1.0, norm=true, backend=backend,
+                    metric=metric, n_iter_max=MAX_ITER)
+
+        # A solve that exceeded the iteration budget returns NaN (and warns).
+        # Averaging over it would produce a mean that looks plausible and is
+        # wrong, which is how this went unnoticed before, so it is fatal here.
+        nbad = count(!isfinite, vals)
+        if nbad > 0
+            error("$setup_name/$backend: $nbad of $(length(vals)) solves did not reach " *
+                  ":optimal within n_iter_max=$MAX_ITER. Raise ENERGYFLOW_ISOTROPY_MAXITER.")
+        end
+
         push!(results, (setup=setup_name, backend=backend, time_s=med, min_s=mn,
                         reps=reps, events=length(evs), mean_iso=mean(vals)))
         @printf("%-8s %-6s %8.4f s  (min %8.4f s, %d reps, %d events, mean isotropy %.6f)\n",
@@ -103,7 +132,10 @@ open(joinpath(@__DIR__, "result", outfile), "w") do io
     println(io, "# Event Isotropy Benchmark — Julia EnergyFlow.jl\n")
     println(io, "ring: N points in φ, (π/(π-2))·(1-cos Δφ); cylinder: 16×$(floor(Int, ymax*16/π)) grid, |y| ≤ $ymax")
     println(io, "sphere: HEALPix unit sphere (192/48 points), 2·(1-cos θ) on 3-momentum directions\n")
-    println(io, "Time is the median over `Reps` repetitions, after a per-backend warmup.\n")
+    println(io, "Time is the median over `Reps` repetitions, after a per-backend warmup.")
+    println(io, "Solved with `n_iter_max=$(MAX_ITER)`; every solve reached `:optimal`, which is")
+    println(io, "asserted rather than assumed (see the script for why sphere3072 needs more")
+    println(io, "than the package default of 100_000).\n")
     write_env_block(io)
     println(io, "| Setup | Backend | Time (s) | Min (s) | Reps | Events | Mean isotropy |")
     println(io, "|---|---|---|---|---|---|---|")

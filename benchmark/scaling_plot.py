@@ -14,14 +14,22 @@
 #       single-threaded POT time as a reference line. This is the parallel
 #       scaling that the single-pair panel cannot show.
 #
-# Inputs (produced by the benchmark scripts):
-#   result/single_emd_julia.md      single_emd_benchmark.jl
-#   result/single_emd_python.md     single_emd_benchmark_python.py
-#   result/emds_julia_t{N}.md       emds_benchmark.jl, once per thread count
-#   result/emds_python.md           emds_benchmark_python.py
+#   (c) Pairwise EMD wall time against the size of the matrix, from a few
+#       thousand pairs to a few million, at fixed thread count. Panels (a) and
+#       (b) fix the workload and vary the problem or the threads; this one
+#       varies the amount of work, which is the axis an analyst extrapolates
+#       along when sizing a run.
 #
-# Panel (b) is omitted if fewer than two thread counts are present, so the
-# figure still builds from a laptop run.
+# Inputs (produced by the benchmark scripts):
+#   result/single_emd_julia.md         single_emd_benchmark.jl
+#   result/single_emd_python.md        single_emd_benchmark_python.py
+#   result/emds_julia_t{N}.md          emds_benchmark.jl, once per thread count
+#   result/emds_python.md              emds_benchmark_python.py
+#   result/pairs_scaling_julia_t{N}.md pairs_scaling_benchmark.jl
+#   result/pairs_scaling_wass_t{N}.md  wass_pairwise_benchmark.py --sizes
+#
+# Each panel is omitted if its inputs are missing, so the figure still builds
+# from a laptop run or from one benchmark rerun on its own.
 
 import argparse
 import os
@@ -155,6 +163,52 @@ def _thread_series(pattern, backend):
     return series
 
 
+def load_pairs_scaling():
+    """Return {label: [(pairs, seconds), ...]} for the pair-count sweep.
+
+    Julia contributes one series per exact backend; wasserstein one, at the same
+    thread count. Files are thread-tagged, and only the highest thread count
+    present is plotted — the panel is about growth in the pair count, so mixing
+    thread counts into it would confound the two axes.
+    """
+    header = ['Events', 'Pairs', 'Setup', 'Backend', 'Time (s)', 'Min (s)', 'Reps', 'Rate (pairs/s)']
+    wass_header = ['Split', 'Setup', 'Backend', 'Time (s)', 'Pairs']
+    series = {}
+    if not os.path.isdir(RESULT_DIR):
+        return series, None
+
+    julia_files = {}
+    wass_files = {}
+    for name in sorted(os.listdir(RESULT_DIR)):
+        m = re.fullmatch(r'pairs_scaling_julia_t(\d+)\.md', name)
+        if m:
+            julia_files[int(m.group(1))] = name
+        m = re.fullmatch(r'pairs_scaling_wass_t(\d+)\.md', name)
+        if m:
+            wass_files[int(m.group(1))] = name
+    if not julia_files and not wass_files:
+        return series, None
+
+    threads = max(list(julia_files) + list(wass_files))
+
+    if threads in julia_files:
+        for row in parse_markdown_table(os.path.join(RESULT_DIR, julia_files[threads]), header):
+            if row['Setup'] != SETUP:
+                continue
+            series.setdefault(row['Backend'], []).append(
+                (int(row['Pairs']), float(row['Time (s)'])))
+    if threads in wass_files:
+        for row in parse_markdown_table(os.path.join(RESULT_DIR, wass_files[threads]), wass_header):
+            if row['Setup'] != SETUP:
+                continue
+            series.setdefault('Wass', []).append(
+                (int(row['Pairs']), float(row['Time (s)'])))
+
+    for points in series.values():
+        points.sort()
+    return series, threads
+
+
 def load_thread_scaling():
     """Return (julia, wasserstein, pot_seconds) for the 50v50 workload.
 
@@ -227,6 +281,49 @@ def plot_thread_scaling(ax, julia, wass, pot):
     ax.legend(fontsize=7.5, frameon=False)
 
 
+def plot_pairs_scaling(ax, series, threads):
+    """(c) Wall time against the number of pairs, at fixed thread count."""
+    anchor = None
+    for key in ('ns64', 'ot64', 'Wass'):
+        points = series.get(key)
+        if not points:
+            continue
+        color, marker, label = STYLES[key]
+        if key == 'Wass':
+            label = 'wasserstein (OpenMP)'
+        pairs = [p[0] for p in points]
+        times = [p[1] for p in points]
+        ax.plot(pairs, times, marker=marker, color=color, label=label,
+                linewidth=1.6, markersize=5, zorder=3)
+        if anchor is None:
+            anchor = (pairs[0], times[0])
+
+    # Linear growth anchored on the smallest measured point. Pairwise EMD is
+    # embarrassingly parallel, so the curves should lie on this line; where they
+    # sit above it at small matrices, that is fixed overhead and load imbalance
+    # rather than solve cost, and the gap closing is the point of the panel.
+    if anchor is not None:
+        all_pairs = sorted({p for pts in series.values() for p, _ in pts})
+        p0, t0 = anchor
+        ax.plot(all_pairs, [t0 * p / p0 for p in all_pairs], linestyle=':',
+                color='0.45', linewidth=1.3, label='linear in pair count', zorder=2)
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    # Decade labels only. Over a narrow range matplotlib also labels the minor
+    # ticks, which collide at this panel width.
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax.set_xlabel('Pairs in matrix')
+    ax.set_ylabel('Wall time (s)')
+    title = '(c) Pairwise EMD vs matrix size'
+    if threads:
+        title += f', {threads} threads'
+    ax.set_title(title, loc='left', fontsize=10)
+    ax.grid(True, which='major', alpha=0.3)
+    ax.grid(True, which='minor', alpha=0.12)
+    ax.legend(fontsize=7.5, frameon=False, loc='upper left')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', default=os.path.join(
@@ -239,33 +336,50 @@ def main():
                            'emds_python.md')]
     if os.path.isdir(RESULT_DIR):
         inputs += [os.path.join(RESULT_DIR, name) for name in os.listdir(RESULT_DIR)
-                   if re.fullmatch(r'(emds_julia|wass_pairwise)_t\d+\.md', name)]
+                   if re.fullmatch(
+                       r'(emds_julia|wass_pairwise|pairs_scaling_julia|pairs_scaling_wass)_t\d+\.md',
+                       name)]
     check_provenance(inputs)
 
     series = load_single_pair()
     julia_threads, wass_threads, pot = load_thread_scaling()
+    pairs_series, pairs_threads = load_pairs_scaling()
     by_threads = julia_threads or wass_threads
 
     if not series:
         sys.exit('No single-pair results found. Run single_emd_benchmark.jl and '
                  'single_emd_benchmark_python.py first (see benchmark.md).')
 
-    two_panel = len(by_threads) >= 2
-    if not two_panel:
+    # Each panel appears only if its inputs exist, so the figure still builds
+    # from a partial result set — a laptop run, or one benchmark rerun alone.
+    want_threads = len(by_threads) >= 2
+    want_pairs = bool(pairs_series)
+    if not want_threads:
         print('Fewer than two thread counts found in result/emds_julia_t*.md; '
-              'building the single-pair panel only.')
+              'omitting the thread-scaling panel.')
+    if not want_pairs:
+        print('No result/pairs_scaling_*.md found; omitting the matrix-size panel. '
+              'Run pairs_scaling_benchmark.jl to include it.')
 
-    width = 9.0 if two_panel else 5.0
-    fig, axes = plt.subplots(1, 2 if two_panel else 1, figsize=(width, 3.6))
-    axes = axes if two_panel else [axes]
+    npanels = 1 + want_threads + want_pairs
+    fig, axes = plt.subplots(1, npanels, figsize=(4.5 * npanels, 3.6))
+    axes = list(axes) if npanels > 1 else [axes]
 
     plot_single_pair(axes[0], series)
-    if two_panel:
-        plot_thread_scaling(axes[1], julia_threads, wass_threads, pot)
+    idx = 1
+    if want_threads:
+        plot_thread_scaling(axes[idx], julia_threads, wass_threads, pot)
+        idx += 1
         if not wass_threads:
-            print('No wass_pairwise_t*.md found: panel (b) shows Julia against a '
+            print('No wass_pairwise_t*.md found: the thread panel shows Julia against a '
                   'single-threaded POT reference only, which is not a fair '
                   'threaded comparison. Run wass_pairwise_benchmark.py per thread count.')
+    if want_pairs:
+        plot_pairs_scaling(axes[idx], pairs_series, pairs_threads)
+        if 'Wass' not in pairs_series:
+            print('No pairs_scaling_wass_t*.md found: the matrix-size panel shows '
+                  'EnergyFlow.jl only. Run wass_pairwise_benchmark.py --sample ... --sizes ... '
+                  'to add the wasserstein comparison.')
 
     fig.tight_layout()
     output = os.path.normpath(args.output)
