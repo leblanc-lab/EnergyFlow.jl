@@ -67,7 +67,9 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
                             beta::Real = 1.0, R::Real = 1.0, norm::Bool = true,
                             max_iter::Int = 100_000, symmetric::Bool = true,
                             arc_mixing::Bool = false,
-                            metric::GroundMetric = EuclideanMetric()) where {V<:AbstractFloat}
+                            metric::GroundMetric = EuclideanMetric(),
+                            strict::Bool = false,
+                            backend::Symbol = :ns64) where {V<:AbstractFloat}
     nev = length(events)
 
     max_n = maximum(length(e[1]) for e in events)
@@ -86,10 +88,11 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
         w0, c0 = events[i]
         w1, c1 = events[j]
 
-        val, _ = _emd_raw!(ws,
+        val, status = _emd_raw!(ws,
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
+        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise self solve")
         results[k] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
@@ -118,7 +121,9 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
                              beta::Real = 1.0, R::Real = 1.0, norm::Bool = true,
                              max_iter::Int = 100_000,
                              arc_mixing::Bool = false,
-                             metric::GroundMetric = EuclideanMetric()) where {V<:AbstractFloat}
+                             metric::GroundMetric = EuclideanMetric(),
+                             strict::Bool = false,
+                             backend::Symbol = :ns64) where {V<:AbstractFloat}
     na = length(events_a)
     nb = length(events_b)
 
@@ -141,10 +146,11 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
         w0, c0 = events_a[i]
         w1, c1 = events_b[j]
 
-        val, _ = _emd_raw!(ws,
+        val, status = _emd_raw!(ws,
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
+        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise cross solve")
         D[i, j] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
@@ -160,7 +166,9 @@ function _pairwise_emd_self!(results::AbstractVector{V},
                              beta::Real = 1.0, R::Real = 1.0, norm::Bool = true,
                              max_iter::Int = 100_000,
                              arc_mixing::Bool = false,
-                             metric::GroundMetric = EuclideanMetric()) where V
+                             metric::GroundMetric = EuclideanMetric(),
+                             strict::Bool = false,
+                             backend::Symbol = :ns64) where V
 
     nev = length(events)
     npairs = nev * (nev - 1) ÷ 2
@@ -179,10 +187,11 @@ function _pairwise_emd_self!(results::AbstractVector{V},
         w0, c0 = events[i]
         w1, c1 = events[j]
 
-        val, _ = _emd_raw!(ws,
+        val, status = _emd_raw!(ws,
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
+        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise self! solve")
         results[k] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
@@ -217,7 +226,8 @@ function emds_ns64(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                    norm::Bool      = false,
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = EuclideanMetric())
+                   metric::GroundMetric = EuclideanMetric(),
+                   strict::Bool = false)
 
     # Unpack all events into (weights, coords) tuples
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(evs, Ref(gdim)))]
@@ -225,12 +235,14 @@ function emds_ns64(events0::AbstractVector{<:AbstractMatrix{<:Real}},
     if events1 === nothing
         tuples0 = _unpack(events0)
         return _pairwise_emd_self(Float64, tuples0; beta=beta, R=R, norm=norm,
-                                  max_iter=n_iter_max, symmetric=true, metric=metric)
+                                  max_iter=n_iter_max, symmetric=true, metric=metric,
+                                  strict=strict, backend=:ns64)
     else
         tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         return _pairwise_emd_cross(Float64, tuples0, tuples1; beta=beta, R=R, norm=norm,
-                                   max_iter=n_iter_max, metric=metric)
+                                   max_iter=n_iter_max, metric=metric,
+                                   strict=strict, backend=:ns64)
     end
 end
 
@@ -248,12 +260,14 @@ function emds_ns64!(results::AbstractVector{Float64},
                     norm::Bool      = false,
                     gdim::Union{Nothing,Int} = nothing,
                     n_iter_max::Int = 100_000,
-                    metric::GroundMetric = EuclideanMetric())
+                    metric::GroundMetric = EuclideanMetric(),
+                    strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(evs, Ref(gdim)))]
     tuples0 = _unpack(events0)
     return _pairwise_emd_self!(results, tuples0; beta=beta, R=R, norm=norm,
-                               max_iter=n_iter_max, metric=metric)
+                               max_iter=n_iter_max, metric=metric,
+                               strict=strict, backend=:ns64)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -274,19 +288,22 @@ function emds_ot64(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                    norm::Bool      = false,
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = EuclideanMetric())
+                   metric::GroundMetric = EuclideanMetric(),
+                   strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(evs, Ref(gdim)))]
 
     if events1 === nothing
         tuples0 = _unpack(events0)
         return _pairwise_emd_self(Float64, tuples0; beta=beta, R=R, norm=norm,
-                                  max_iter=n_iter_max, symmetric=true, arc_mixing=true, metric=metric)
+                                  max_iter=n_iter_max, symmetric=true, arc_mixing=true, metric=metric,
+                                  strict=strict, backend=:ot64)
     else
         tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         return _pairwise_emd_cross(Float64, tuples0, tuples1; beta=beta, R=R, norm=norm,
-                                   max_iter=n_iter_max, arc_mixing=true, metric=metric)
+                                   max_iter=n_iter_max, arc_mixing=true, metric=metric,
+                                   strict=strict, backend=:ot64)
     end
 end
 
@@ -304,12 +321,14 @@ function emds_ot64!(results::AbstractVector{Float64},
                     norm::Bool      = false,
                     gdim::Union{Nothing,Int} = nothing,
                     n_iter_max::Int = 100_000,
-                    metric::GroundMetric = EuclideanMetric())
+                    metric::GroundMetric = EuclideanMetric(),
+                    strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(evs, Ref(gdim)))]
     tuples0 = _unpack(events0)
     return _pairwise_emd_self!(results, tuples0; beta=beta, R=R, norm=norm,
-                               max_iter=n_iter_max, arc_mixing=true, metric=metric)
+                               max_iter=n_iter_max, arc_mixing=true, metric=metric,
+                               strict=strict, backend=:ot64)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -330,19 +349,22 @@ function emds_ns32(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                    norm::Bool      = false,
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = EuclideanMetric())
+                   metric::GroundMetric = EuclideanMetric(),
+                   strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(Ref(Float32), evs, Ref(gdim)))]
 
     if events1 === nothing
         tuples0 = _unpack(events0)
         return _pairwise_emd_self(Float32, tuples0; beta=beta, R=R, norm=norm,
-                                  max_iter=n_iter_max, symmetric=true, metric=metric)
+                                  max_iter=n_iter_max, symmetric=true, metric=metric,
+                                  strict=strict, backend=:ns32)
     else
         tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         return _pairwise_emd_cross(Float32, tuples0, tuples1; beta=beta, R=R, norm=norm,
-                                   max_iter=n_iter_max, metric=metric)
+                                   max_iter=n_iter_max, metric=metric,
+                                   strict=strict, backend=:ns32)
     end
 end
 
@@ -359,12 +381,14 @@ function emds_ns32!(results::AbstractVector{Float32},
                     norm::Bool      = false,
                     gdim::Union{Nothing,Int} = nothing,
                     n_iter_max::Int = 100_000,
-                    metric::GroundMetric = EuclideanMetric())
+                    metric::GroundMetric = EuclideanMetric(),
+                    strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(Ref(Float32), evs, Ref(gdim)))]
     tuples0 = _unpack(events0)
     return _pairwise_emd_self!(results, tuples0; beta=beta, R=R, norm=norm,
-                               max_iter=n_iter_max, metric=metric)
+                               max_iter=n_iter_max, metric=metric,
+                               strict=strict, backend=:ns32)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -384,19 +408,22 @@ function emds_ot32(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                    norm::Bool      = false,
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = EuclideanMetric())
+                   metric::GroundMetric = EuclideanMetric(),
+                   strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(Ref(Float32), evs, Ref(gdim)))]
 
     if events1 === nothing
         tuples0 = _unpack(events0)
         return _pairwise_emd_self(Float32, tuples0; beta=beta, R=R, norm=norm,
-                                  max_iter=n_iter_max, symmetric=true, arc_mixing=true, metric=metric)
+                                  max_iter=n_iter_max, symmetric=true, arc_mixing=true, metric=metric,
+                                  strict=strict, backend=:ot32)
     else
         tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         return _pairwise_emd_cross(Float32, tuples0, tuples1; beta=beta, R=R, norm=norm,
-                                   max_iter=n_iter_max, arc_mixing=true, metric=metric)
+                                   max_iter=n_iter_max, arc_mixing=true, metric=metric,
+                                   strict=strict, backend=:ot32)
     end
 end
 
@@ -413,10 +440,12 @@ function emds_ot32!(results::AbstractVector{Float32},
                     norm::Bool      = false,
                     gdim::Union{Nothing,Int} = nothing,
                     n_iter_max::Int = 100_000,
-                    metric::GroundMetric = EuclideanMetric())
+                    metric::GroundMetric = EuclideanMetric(),
+                    strict::Bool = false)
 
     _unpack(evs) = [(w, c) for (w, c) in (_unpack_event.(Ref(Float32), evs, Ref(gdim)))]
     tuples0 = _unpack(events0)
     return _pairwise_emd_self!(results, tuples0; beta=beta, R=R, norm=norm,
-                               max_iter=n_iter_max, arc_mixing=true, metric=metric)
+                               max_iter=n_iter_max, arc_mixing=true, metric=metric,
+                               strict=strict, backend=:ot32)
 end

@@ -123,4 +123,19 @@ end
     @test D[2, 3] ≈ 2.0 atol=1e-12
 end
 
+@testset "EMDSolver status warnings and strict failure" begin
+    ev0 = [1.0 0.0; 1.0 1.0]
+    ev1 = [1.0 0.0; 1.0 1.0]
+
+    val = emd_ns64(ev0, ev1; norm=true, n_iter_max=0, strict=false)
+    @test isnan(val)
+
+    @test_logs (:warn, r"status=:max_iter") begin
+        val = emd_ns64(ev0, ev1; norm=true, n_iter_max=0, strict=false)
+        @test isnan(val)
+    end
+
+    @test_throws ErrorException emd_ns64(ev0, ev1; norm=true, n_iter_max=0, strict=true)
+end
+
 test_log("\nAll EMDSolver tests completed!")

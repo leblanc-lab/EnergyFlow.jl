@@ -33,6 +33,8 @@ from particle ``i`` to particle ``j`` and ``d_{ij}`` is their ground distance.
 - **In-place variants** ([`emd!`](@ref), [`emds!`](@ref)) with reusable
   workspaces for allocation-free hot loops
 - **HepMC3 event loading** with [`load_hepmc3_events`](@ref)
+- **ROOT tree loading** with [`load_root_events`](@ref) and
+  [`load_root_momenta`](@ref)
 
 ## Installation
 

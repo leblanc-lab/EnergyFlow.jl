@@ -225,4 +225,16 @@ end
     @test length(sk) == 0
 end
 
+@testset "Sinkhorn status warnings and strict failure" begin
+    ev0 = [1.0 0.0; 1.0 1.0]
+    ev1 = [1.0 0.0; 1.0 1.0]
+
+    @test_logs (:warn, r"status=:max_iter") begin
+        val = emd_sinkhorn(ev0, ev1; norm=true, max_iter_sinkhorn=0, strict=false)
+        @test isnan(val)
+    end
+
+    @test_throws ErrorException emd_sinkhorn(ev0, ev1; norm=true, max_iter_sinkhorn=0, strict=true)
+end
+
 test_log("\nAll Sinkhorn tests completed!")

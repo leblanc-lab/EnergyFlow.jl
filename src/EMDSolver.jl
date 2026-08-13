@@ -100,6 +100,25 @@ end
 
 EMDWorkspace(max_n0::Int, max_n1::Int; kwargs...) = EMDWorkspace{Float64}(max_n0, max_n1; kwargs...)
 
+"""
+    _handle_solver_status(status; strict=false, backend=:ns64, context="EMD solve")
+
+Internal helper: validates solver status. For non-`:optimal` status, emits a
+warning by default or throws when `strict=true`.
+"""
+function _handle_solver_status(status::Symbol;
+                               strict::Bool = false,
+                               backend::Symbol = :ns64,
+                               context::AbstractString = "EMD solve")
+    status === :optimal && return
+    msg = "$context failed with backend :$backend (status=:$status). Returned value may be invalid."
+    if strict
+        error(msg)
+    else
+        @warn msg
+    end
+end
+
 # ─────────────────────────────────────────────────────────────────────
 # Raw EMD computation (weights + coords interface)
 # ─────────────────────────────────────────────────────────────────────
@@ -194,9 +213,13 @@ function _emd_raw!(ws::EMDWorkspace{V},
     status = network_simplex!(ws.ns, sw, tw; max_iter=max_iter)
     ws.ns.arc_mixing = old_arc_mixing
 
-    # Extract total cost
-    emd_val = ws.ns.total_cost
+    # Avoid returning stale ws.ns.total_cost when the solver fails (e.g. :max_iter).
+    if status !== :optimal
+        return V(NaN), status
+    end
 
+    # Extract total cost only on successful solve.
+    emd_val = ws.ns.total_cost
     if !ws.norm
         emd_val *= scale
     end
@@ -228,7 +251,8 @@ function emd_ns64!(ws::EMDWorkspace{V},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = ws.metric) where V
+                   metric::GroundMetric = ws.metric,
+                   strict::Bool = false) where V
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
@@ -237,6 +261,7 @@ function emd_ns64!(ws::EMDWorkspace{V},
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, metric=metric)
+    _handle_solver_status(_status; strict=strict, backend=:ns64, context="emd_ns64!")
     return val
 end
 
@@ -269,13 +294,15 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
                   metric::GroundMetric = EuclideanMetric(),
-                  return_flow::Bool = false)
+                  return_flow::Bool = false,
+                  strict::Bool = false)
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
 
     if !return_flow
         val, _status = _emd_raw_alloc(w0, c0, w1, c1; beta=beta, R=R, norm=norm, max_iter=n_iter_max, metric=metric)
+        _handle_solver_status(_status; strict=strict, backend=:ns64, context="emd_ns64")
         return val
     end
 
@@ -287,6 +314,7 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max)
+    _handle_solver_status(_status; strict=strict, backend=:ns64, context="emd_ns64(return_flow=true)")
     return val, _transport_plan(ws.ns; arc_mixing=false)
 end
 
@@ -305,7 +333,8 @@ function emd_ot64!(ws::EMDWorkspace{V},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = ws.metric) where V
+                   metric::GroundMetric = ws.metric,
+                   strict::Bool = false) where V
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
@@ -314,6 +343,7 @@ function emd_ot64!(ws::EMDWorkspace{V},
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true, metric=metric)
+    _handle_solver_status(_status; strict=strict, backend=:ot64, context="emd_ot64!")
     return val
 end
 
@@ -332,7 +362,8 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
                   metric::GroundMetric = EuclideanMetric(),
-                  return_flow::Bool = false)
+                  return_flow::Bool = false,
+                  strict::Bool = false)
 
     w0, c0 = _unpack_event(ev0, gdim)
     w1, c1 = _unpack_event(ev1, gdim)
@@ -345,6 +376,7 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true)
+    _handle_solver_status(_status; strict=strict, backend=:ot64, context="emd_ot64")
     return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
 end
 
@@ -364,12 +396,14 @@ function emd_ns32!(ws::EMDWorkspace{Float32},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = ws.metric)
+                   metric::GroundMetric = ws.metric,
+                   strict::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
 
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, metric=metric)
+    _handle_solver_status(_status; strict=strict, backend=:ns32, context="emd_ns32!")
     return val
 end
 
@@ -388,7 +422,8 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
                   metric::GroundMetric = EuclideanMetric(),
-                  return_flow::Bool = false)
+                  return_flow::Bool = false,
+                  strict::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
@@ -398,10 +433,12 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
     if !return_flow
         val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
+        _handle_solver_status(_status; strict=strict, backend=:ns32, context="emd_ns32")
         return val
     end
 
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
+    _handle_solver_status(_status; strict=strict, backend=:ns32, context="emd_ns32(return_flow=true)")
     return val, _transport_plan(ws.ns; arc_mixing=false)
 end
 
@@ -416,12 +453,14 @@ function emd_ot32!(ws::EMDWorkspace{Float32},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
-                   metric::GroundMetric = ws.metric)
+                   metric::GroundMetric = ws.metric,
+                   strict::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
 
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true, metric=metric)
+    _handle_solver_status(_status; strict=strict, backend=:ot32, context="emd_ot32!")
     return val
 end
 
@@ -440,7 +479,8 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   gdim::Union{Nothing,Int} = nothing,
                   n_iter_max::Int = 100_000,
                   metric::GroundMetric = EuclideanMetric(),
-                  return_flow::Bool = false)
+                  return_flow::Bool = false,
+                  strict::Bool = false)
 
     w0, c0 = _unpack_event(Float32, ev0, gdim)
     w1, c1 = _unpack_event(Float32, ev1, gdim)
@@ -449,5 +489,6 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     n1 = length(w1)
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true)
+    _handle_solver_status(_status; strict=strict, backend=:ot32, context="emd_ot32")
     return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
 end

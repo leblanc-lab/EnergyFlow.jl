@@ -111,18 +111,19 @@ function emd!(ws::EMDWorkspace,
               backend::Symbol = EMD_BACKEND[],
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
-              metric::Union{Nothing,GroundMetric} = nothing)
+              metric::Union{Nothing,GroundMetric} = nothing,
+              strict::Bool = false)
 
     metric = something(metric, ws.metric)
 
     if backend === :ns64
-        return emd_ns64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ns64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot64
-        return emd_ot64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ot64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ns32
-        return emd_ns32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ns32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot32
-        return emd_ot32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+        return emd_ot32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end
@@ -135,11 +136,12 @@ function emd!(ws::SinkhornWorkspace,
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
               metric::Union{Nothing,GroundMetric} = nothing,
-              return_flow::Bool = false)
+              return_flow::Bool = false,
+              strict::Bool = false)
     if metric !== nothing && !(metric isa EuclideanMetric)
         error("sinkhorn backend currently supports only EuclideanMetric().")
     end
-    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim, return_flow=return_flow)
+    return emd_sinkhorn!(ws, ev0, ev1; gdim=gdim, return_flow=return_flow, strict=strict)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -205,21 +207,22 @@ function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
              gdim::Union{Nothing,Int} = nothing,
              n_iter_max::Int = 100_000,
              metric::GroundMetric = EuclideanMetric(),
-             return_flow::Bool = false)
+             return_flow::Bool = false,
+             strict::Bool = false)
 
     if backend === :ns64
-        return emd_ns64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
+        return emd_ns64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
     elseif backend === :ot64
-        return emd_ot64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
+        return emd_ot64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
     elseif backend === :ns32
-        return emd_ns32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
+        return emd_ns32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
     elseif backend === :ot32
-        return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow)
+        return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
     elseif backend === :sinkhorn
         if metric isa GroundMetric && !(metric isa EuclideanMetric)
             error("sinkhorn backend currently supports only EuclideanMetric().")
         end
-        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, return_flow=return_flow)
+        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, return_flow=return_flow, strict=strict)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end
@@ -255,20 +258,21 @@ function emds!(results::AbstractVector{<:AbstractFloat},
                norm::Bool      = false,
                gdim::Union{Nothing,Int} = nothing,
                n_iter_max::Int = 100_000,
-               metric::GroundMetric = EuclideanMetric())
+               metric::GroundMetric = EuclideanMetric(),
+               strict::Bool = false)
 
     if backend === :ns64
         return emds_ns64!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot64
         return emds_ot64!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ns32
         return emds_ns32!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot32
         return emds_ot32!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :sinkhorn
         error("emds! (in-place) is not supported for :sinkhorn backend. Use emds() instead.")
     else
@@ -324,23 +328,24 @@ function emds(events0::AbstractVector{<:AbstractMatrix{<:Real}},
               norm::Bool      = false,
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
-              metric::GroundMetric = EuclideanMetric())
+              metric::GroundMetric = EuclideanMetric(),
+              strict::Bool = false)
 
     if backend === :ns64
         return emds_ns64(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot64
         return emds_ot64(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ns32
         return emds_ns32(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :ot32
         return emds_ot32(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric)
+                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :sinkhorn
         return emds_sinkhorn(events0, events1; R=R, beta=beta, norm=norm,
-                             gdim=gdim, n_iter_max=n_iter_max)
+                             gdim=gdim, n_iter_max=n_iter_max, strict=strict)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end
