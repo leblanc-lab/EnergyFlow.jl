@@ -33,12 +33,6 @@ julia --project -e 'using Pkg; Pkg.instantiate()'
 julia --project -e 'using Pkg; Pkg.test()'
 ```
 
-For faster iteration on a single test file:
-
-```bash
-julia --project test/runtests.jl
-```
-
 The CI runs on Julia LTS, stable (`1`), and pre-release on Linux, plus
 a thread-safety check (single-threaded precompile, multi-threaded run).
 
