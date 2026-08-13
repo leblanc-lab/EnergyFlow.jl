@@ -225,4 +225,9 @@ end
     @test length(sk) == 0
 end
 
+@testset "Sinkhorn pairwise metric validation" begin
+    events = [random_event(8) for _ in 1:3]
+    @test_throws ErrorException emds(events; backend=:sinkhorn, metric=EtaPhiMetric())
+end
+
 test_log("\nAll Sinkhorn tests completed!")
