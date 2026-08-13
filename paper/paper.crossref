@@ -6,8 +6,8 @@
            version="5.3.1"
            xsi:schemaLocation="http://www.crossref.org/schema/5.3.1 http://www.crossref.org/schemas/crossref5.3.1.xsd">
   <head>
-    <doi_batch_id>20260810205325-c5235c8028c6ed8a8cd8305cf56b5f881e988d8a</doi_batch_id>
-    <timestamp>20260810205325</timestamp>
+    <doi_batch_id>20260812175309-c5235c8028c6ed8a8cd8305cf56b5f881e988d8a</doi_batch_id>
+    <timestamp>20260812175309</timestamp>
     <depositor>
       <depositor_name>JOSS Admin</depositor_name>
       <email_address>admin@theoj.org</email_address>
@@ -217,6 +217,12 @@
             <doi>10.1137/141000671</doi>
             <cYear>2017</cYear>
             <unstructured_citation>Bezanson, J., Edelman, A., Karpinski, S., &amp; Shah, V. B. (2017). Julia: A Fresh Approach to Numerical Computing. SIAM Review, 59(1), 65–98. https://doi.org/10.1137/141000671</unstructured_citation>
+          </citation>
+          <citation key="Atzori:2026blf">
+            <article_title>Event isotropy in perturbative QCD</article_title>
+            <author>Atzori</author>
+            <cYear>2026</cYear>
+            <unstructured_citation>Atzori, D., Cacciari, M., Marzani, S., &amp; Soyez, G. (2026). Event isotropy in perturbative QCD. https://arxiv.org/abs/2606.23924</unstructured_citation>
           </citation>
         </citation_list>
       </journal_article>
