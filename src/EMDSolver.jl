@@ -142,12 +142,12 @@ function _emd_raw!(ws::EMDWorkspace{V},
     else
         weight_diff = total1 - total0
 
-        if weight_diff > sqrt(eps(V))
+        if weight_diff > zero(V)
             # Target is heavier: add fictitious source
             has_fict_source = true
             n0_eff = n0 + 1
             n1_eff = n1
-        elseif weight_diff < -sqrt(eps(V))
+        elseif weight_diff < zero(V)
             # Source is heavier: add fictitious target
             has_fict_target = true
             n0_eff = n0
