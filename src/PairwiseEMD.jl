@@ -71,6 +71,9 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
                             strict::Bool = false,
                             backend::Symbol = :ns64) where {V<:AbstractFloat}
     nev = length(events)
+    if nev <= 1
+        return Vector{V}(undef, 0)
+    end
 
     max_n = maximum(length(e[1]) for e in events)
     npairs = nev * (nev - 1) ÷ 2
@@ -128,6 +131,9 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
                              backend::Symbol = :ns64) where {V<:AbstractFloat}
     na = length(events_a)
     nb = length(events_b)
+    if na == 0 || nb == 0
+        return Matrix{V}(undef, na, nb)
+    end
 
     max_na = maximum(length(e[1]) for e in events_a)
     max_nb = maximum(length(e[1]) for e in events_b)
@@ -177,6 +183,9 @@ function _pairwise_emd_self!(results::AbstractVector{V},
     nev = length(events)
     npairs = nev * (nev - 1) ÷ 2
     @assert length(results) >= npairs "results vector too short"
+    if nev <= 1
+        return results
+    end
 
     statuses = Vector{Symbol}(undef, npairs)
     max_n = maximum(length(e[1]) for e in events)
