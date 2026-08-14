@@ -230,9 +230,9 @@ function _sinkhorn_plan_dims(ws::SinkhornWorkspace{V},
 
     if !ws.norm
         weight_diff = sum(weights1) - sum(weights0)
-        if weight_diff > sqrt(eps(V))
+        if weight_diff > zero(V)
             n0_eff += 1
-        elseif weight_diff < -sqrt(eps(V))
+        elseif weight_diff < zero(V)
             n1_eff += 1
         end
     end
@@ -339,11 +339,11 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
     else
         weight_diff = total1 - total0
 
-        if weight_diff > sqrt(eps(V))
+        if weight_diff > zero(V)
             has_fict_source = true
             n0_eff = n0 + 1
             n1_eff = n1
-        elseif weight_diff < -sqrt(eps(V))
+        elseif weight_diff < zero(V)
             has_fict_target = true
             n0_eff = n0
             n1_eff = n1 + 1
