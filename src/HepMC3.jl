@@ -182,7 +182,7 @@ end
 Load events from a HepMC3 ASCII file as `M×4` matrices with columns
 `[E, px, py, pz]`, suitable for spherical isotropy.
 """
-function load_hepmc3_momenta(filepath::String; maxevents::Int=-1, status::Int=1)
+function load_hepmc3_momenta(filepath::AbstractString; maxevents::Int=-1, status::Int=1)
     events = Matrix{Float64}[]
     raw = NTuple{4,Float64}[]
     n_ev = 0

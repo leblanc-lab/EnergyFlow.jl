@@ -74,7 +74,7 @@ skipped. This is a standalone parser; it does not require `LorentzVectorHEP`.
 - η   = asinh(pz / pT)        — pseudorapidity
 - φ   = atan(py, px) ∈ (-π,π] — azimuthal angle (radians)
 """
-function load_hepmc3_events(filepath::String;
+function load_hepmc3_events(filepath::AbstractString;
                              maxevents::Int  = -1,
                              skipevents::Int = 0,
                              status::Int     = 1,
