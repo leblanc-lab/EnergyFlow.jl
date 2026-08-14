@@ -20,7 +20,7 @@
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    EMDWorkspace{V<:AbstractFloat}
+    EMDWorkspace{V<:AbstractFloat, M<:GroundMetric}
 
 Pre-allocated workspace for repeated EMD computations with the
 network-simplex backends. Construct once, then pass to [`emd!`](@ref) (or the
@@ -29,11 +29,19 @@ backend-specific `emd_ns64!` etc.) to avoid per-call allocations.
 The EMD parameters (`beta`, `R`, `norm`, `metric`) are stored in the
 workspace and used by every solve.
 
+!!! note
+    The workspace is specialized on its ground-metric type `M` (the second
+    type parameter). Updating `beta`, `R`, or `norm` in place is fine, but
+    switching to a *different* metric type requires constructing a new
+    workspace — assigning a metric of another type to `ws.metric` will error,
+    because the field is typed `M`.
+
 # Fields
 - `ns`: [`NetworkSimplexSolver`](@ref) workspace
 - `beta`, `R`: EMD parameters
 - `norm`: if `true`, normalize event weights to sum to 1 before solving
-- `metric`: ground distance metric ([`GroundMetric`](@ref))
+- `metric`: ground distance metric ([`GroundMetric`](@ref)); its concrete type
+  is the workspace's `M` parameter
 - `parallel_threshold`: fill the cost matrix in parallel when
   `n0 * n1 >= parallel_threshold` (default `40_000`)
 
