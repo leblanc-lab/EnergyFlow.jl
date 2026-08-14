@@ -23,6 +23,8 @@ test_log("="^70)
         test_log("  ns64 = $ns64_val, ot64 = $ot64_val")
         @test ns64_val ≈ emd_ns64(ev0, ev1; R=1.0, beta=1.0, norm=true)
         @test ot64_val ≈ emd_ot64(ev0, ev1; R=1.0, beta=1.0, norm=true)
+        #Check that strict is accepted
+        @test emd(ev0, ev1; backend=:ns64, R=1.0, beta=1.0, norm=true, strict=true) ≈ ns64_val
 
         ns64_val_flow, ns64_plan = emd(ev0_plan, ev1_plan; backend=:ns64, R=1.0, beta=1.0, norm=true, return_flow=true)
         ot64_val_flow, ot64_plan = emd(ev0_plan, ev1_plan; backend=:ot64, R=1.0, beta=1.0, norm=true, return_flow=true)

@@ -21,6 +21,69 @@
 const AVAILABLE_BACKENDS = [:ns64, :ot64, :ns32, :ot32, :sinkhorn]
 const EMD_BACKEND = Ref(:ns64)
 
+# Backend dispatch types
+abstract type EMDBackend end
+struct NS64     <: EMDBackend end
+struct OT64     <: EMDBackend end
+struct NS32     <: EMDBackend end
+struct OT32     <: EMDBackend end
+struct Sinkhorn <: EMDBackend end
+
+# Symbol <-> backend-type mapping.
+_as_backend(b::EMDBackend) = b
+_as_backend(b::Symbol) =
+    b === :ns64     ? NS64()     :
+    b === :ot64     ? OT64()     :
+    b === :ns32     ? NS32()     :
+    b === :ot32     ? OT32()     :
+    b === :sinkhorn ? Sinkhorn() :
+    error("Unknown backend :$b. Available: $(AVAILABLE_BACKENDS)")
+
+_backend_symbol(::NS64)     = :ns64
+_backend_symbol(::OT64)     = :ot64
+_backend_symbol(::NS32)     = :ns32
+_backend_symbol(::OT32)     = :ot32
+_backend_symbol(::Sinkhorn) = :sinkhorn
+
+# Per-backend dispatch for the allocating single-pair `emd`.
+_emd(::NS64, ev0, ev1; kw...) = emd_ns64(ev0, ev1; kw...)
+_emd(::OT64, ev0, ev1; kw...) = emd_ot64(ev0, ev1; kw...)
+_emd(::NS32, ev0, ev1; kw...) = emd_ns32(ev0, ev1; kw...)
+_emd(::OT32, ev0, ev1; kw...) = emd_ot32(ev0, ev1; kw...)
+function _emd(::Sinkhorn, ev0, ev1; metric::GroundMetric = EuclideanMetric(), kw...)
+    metric isa EuclideanMetric ||
+        error("sinkhorn backend currently supports only EuclideanMetric().")
+    return emd_sinkhorn(ev0, ev1; kw...)          # note: metric intentionally not forwarded
+end
+
+# Per-backend dispatch for  in-place single-pair `emd!`.
+_emd!(::NS64, ws, ev0, ev1; kw...) = emd_ns64!(ws, ev0, ev1; kw...)
+_emd!(::OT64, ws, ev0, ev1; kw...) = emd_ot64!(ws, ev0, ev1; kw...)
+_emd!(::NS32, ws, ev0, ev1; kw...) = emd_ns32!(ws, ev0, ev1; kw...)
+_emd!(::OT32, ws, ev0, ev1; kw...) = emd_ot32!(ws, ev0, ev1; kw...)
+_emd!(::Sinkhorn, ws::EMDWorkspace, ev0, ev1; kw...) =
+    error("Use a SinkhornWorkspace (not EMDWorkspace) for the Sinkhorn backend.")
+
+# Per-backend dispatch for allocating pairwise `emds`.
+_emds(::NS64, events0, events1; kw...) = emds_ns64(events0, events1; kw...)
+_emds(::OT64, events0, events1; kw...) = emds_ot64(events0, events1; kw...)
+_emds(::NS32, events0, events1; kw...) = emds_ns32(events0, events1; kw...)
+_emds(::OT32, events0, events1; kw...) = emds_ot32(events0, events1; kw...)
+function _emds(::Sinkhorn, events0, events1; metric::GroundMetric = EuclideanMetric(), kw...)
+    metric isa EuclideanMetric ||
+        error("sinkhorn backend currently supports only EuclideanMetric().")
+    return emds_sinkhorn(events0, events1; metric, kw...)   # metric IS forwarded here
+end
+
+# Per-backend dispatch for in-place pairwise `emds!`.
+_emds!(::NS64, results, events0; kw...) = emds_ns64!(results, events0; kw...)
+_emds!(::OT64, results, events0; kw...) = emds_ot64!(results, events0; kw...)
+_emds!(::NS32, results, events0; kw...) = emds_ns32!(results, events0; kw...)
+_emds!(::OT32, results, events0; kw...) = emds_ot32!(results, events0; kw...)
+_emds!(::Sinkhorn, results, events0; kw...) =
+    error("emds! (in-place) is not supported for the Sinkhorn backend. Use emds() instead.")
+
+
 """
     set_backend(backend::Symbol) -> Symbol
 
@@ -108,25 +171,13 @@ See also [`emd`](@ref), [`emds!`](@ref).
 """
 function emd!(ws::EMDWorkspace,
               ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
-              backend::Symbol = EMD_BACKEND[],
+              backend::Union{Symbol,EMDBackend} = EMD_BACKEND[],
               gdim::Union{Nothing,Int} = nothing,
               n_iter_max::Int = 100_000,
               metric::Union{Nothing,GroundMetric} = nothing,
               strict::Bool = false)
-
     metric = something(metric, ws.metric)
-
-    if backend === :ns64
-        return emd_ns64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot64
-        return emd_ot64!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ns32
-        return emd_ns32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot32
-        return emd_ot32!(ws, ev0, ev1; gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    else
-        error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
-    end
+    return _emd!(_as_backend(backend), ws, ev0, ev1; gdim, n_iter_max, metric, strict)
 end
 
 # Sinkhorn workspace variant of emd!
@@ -200,7 +251,7 @@ emd(ev0, ev1; metric=EtaPhiMetric())           # periodic φ handling
 See also [`emds`](@ref), [`emd!`](@ref).
 """
 function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
-             backend::Symbol = EMD_BACKEND[],
+             backend::Union{Symbol,EMDBackend} = EMD_BACKEND[],
              R::Real         = 1.0,
              beta::Real      = 1.0,
              norm::Bool      = false,
@@ -210,22 +261,8 @@ function emd(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
              return_flow::Bool = false,
              strict::Bool = false)
 
-    if backend === :ns64
-        return emd_ns64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
-    elseif backend === :ot64
-        return emd_ot64(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
-    elseif backend === :ns32
-        return emd_ns32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
-    elseif backend === :ot32
-        return emd_ot32(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, metric=metric, return_flow=return_flow, strict=strict)
-    elseif backend === :sinkhorn
-        if metric isa GroundMetric && !(metric isa EuclideanMetric)
-            error("sinkhorn backend currently supports only EuclideanMetric().")
-        end
-        return emd_sinkhorn(ev0, ev1; R=R, beta=beta, norm=norm, gdim=gdim, n_iter_max=n_iter_max, return_flow=return_flow, strict=strict)
-    else
-        error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
-    end
+    return _emd(_as_backend(backend), ev0, ev1;
+                R, beta, norm, gdim, n_iter_max, metric, return_flow, strict)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -252,7 +289,7 @@ emds!(results, events; norm=true)
 """
 function emds!(results::AbstractVector{<:AbstractFloat},
                events0::AbstractVector{<:AbstractMatrix{<:Real}};
-               backend::Symbol = EMD_BACKEND[],
+               backend::Union{Symbol,EMDBackend} = EMD_BACKEND[],
                R::Real         = 1.0,
                beta::Real      = 1.0,
                norm::Bool      = false,
@@ -261,23 +298,8 @@ function emds!(results::AbstractVector{<:AbstractFloat},
                metric::GroundMetric = EuclideanMetric(),
                strict::Bool = false)
 
-    if backend === :ns64
-        return emds_ns64!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot64
-        return emds_ot64!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ns32
-        return emds_ns32!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot32
-        return emds_ot32!(results, events0; R=R, beta=beta, norm=norm,
-                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :sinkhorn
-        error("emds! (in-place) is not supported for :sinkhorn backend. Use emds() instead.")
-    else
-        error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
-    end
+    return _emds!(_as_backend(backend), results, events0;
+                  R, beta, norm, gdim, n_iter_max, metric, strict)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -322,7 +344,7 @@ See also [`emd`](@ref), [`emds!`](@ref).
 """
 function emds(events0::AbstractVector{<:AbstractMatrix{<:Real}},
               events1::Union{Nothing, AbstractVector{<:AbstractMatrix{<:Real}}} = nothing;
-              backend::Symbol = EMD_BACKEND[],
+              backend::Union{Symbol,EMDBackend} = EMD_BACKEND[],
               R::Real         = 1.0,
               beta::Real      = 1.0,
               norm::Bool      = false,
@@ -331,26 +353,6 @@ function emds(events0::AbstractVector{<:AbstractMatrix{<:Real}},
               metric::GroundMetric = EuclideanMetric(),
               strict::Bool = false)
 
-    if backend === :ns64
-        return emds_ns64(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot64
-        return emds_ot64(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ns32
-        return emds_ns32(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :ot32
-        return emds_ot32(events0, events1; R=R, beta=beta, norm=norm,
-                         gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
-    elseif backend === :sinkhorn
-        if metric isa GroundMetric && !(metric isa EuclideanMetric)
-            error("sinkhorn backend currently supports only EuclideanMetric().")
-        end
-        return emds_sinkhorn(events0, events1; R=R, beta=beta, norm=norm,
-                             gdim=gdim, n_iter_max=n_iter_max, strict=strict, 
-                             metric=metric)
-    else
-        error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
-    end
+    return _emds(_as_backend(backend), events0, events1;
+                 R, beta, norm, gdim, n_iter_max, metric, strict)
 end
