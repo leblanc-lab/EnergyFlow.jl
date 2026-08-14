@@ -57,6 +57,12 @@ test_log("="^70)
         @test ns32_inplace isa Float32
         @test ot32_inplace isa Float32
 
+       # Backend-specific in-place frontends must remain type-stable.
+        @test (@inferred emd_ns64!(ws64, ev0, ev1; strict=true)) ≈ ns64_inplace
+        @test (@inferred emd_ot64!(ws64, ev0, ev1; strict=true)) ≈ ot64_inplace
+        @test (@inferred emd_ns32!(ws32, ev0, ev1; strict=true)) ≈ ns32_inplace
+        @test (@inferred emd_ot32!(ws32, ev0, ev1; strict=true)) ≈ ot32_inplace
+
         metric = CustomMetric((a, b) -> 2 * sqrt(sum((a .- b) .^ 2)))
         metric_val = emd!(ws64, ev0, ev1; backend=:ns64, metric=metric)
         @test metric_val ≈ emd(ev0, ev1; backend=:ns64, R=1.0, beta=1.0, norm=true, metric=metric)
