@@ -4,8 +4,7 @@
     Utils: Event format helpers for EMD computation.
 
     Provides _unpack_event for extracting weights and coordinates from
-    EnergyFlow-format event matrices, and _emd_raw_alloc for convenience
-    EMD computation with automatic workspace allocation.
+    EnergyFlow-format event matrices.
 =#
 
 # ─────────────────────────────────────────────────────────────────────
@@ -142,33 +141,8 @@ function _particles_to_ptEtaPhi(particles::Vector{NTuple{3,Float64}}, pt_cut::Fl
 end
 
 # ─────────────────────────────────────────────────────────────────────
-# Convenience raw EMD with automatic workspace allocation
+# Transport plan reconstruction
 # ─────────────────────────────────────────────────────────────────────
-
-"""
-    _emd_raw_alloc(weights0, coords0, weights1, coords1; kwargs...) -> (V, Symbol)
-
-Convenience raw EMD that allocates a workspace internally.
-"""
-function _emd_raw_alloc(weights0::AbstractVector{<:Real}, coords0::AbstractMatrix{<:Real},
-                        weights1::AbstractVector{<:Real}, coords1::AbstractMatrix{<:Real};
-                        beta::Real = 1.0, R::Real = 1.0, norm::Bool = true,
-                        max_iter::Int = 100_000,
-                        metric::GroundMetric = EuclideanMetric())
-    V = promote_type(eltype(weights0), eltype(coords0), eltype(weights1), eltype(coords1), Float64)
-
-    n0 = length(weights0)
-    n1 = length(weights1)
-
-    ws = EMDWorkspace{V}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
-
-    w0 = convert(Vector{V}, weights0)
-    c0 = convert(Matrix{V}, coords0)
-    w1 = convert(Vector{V}, weights1)
-    c1 = convert(Matrix{V}, coords1)
-
-    return _emd_raw!(ws, w0, c0, w1, c1; max_iter=max_iter)
-end
 
 """
     _transport_plan(ns::NetworkSimplexSolver; arc_mixing=false) -> Matrix
