@@ -344,8 +344,12 @@ function emds(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         return emds_ot32(events0, events1; R=R, beta=beta, norm=norm,
                          gdim=gdim, n_iter_max=n_iter_max, metric=metric, strict=strict)
     elseif backend === :sinkhorn
+        if metric isa GroundMetric && !(metric isa EuclideanMetric)
+            error("sinkhorn backend currently supports only EuclideanMetric().")
+        end
         return emds_sinkhorn(events0, events1; R=R, beta=beta, norm=norm,
-                             gdim=gdim, n_iter_max=n_iter_max, strict=strict)
+                             gdim=gdim, n_iter_max=n_iter_max, strict=strict, 
+                             metric=metric)
     else
         error("Unknown backend :$backend. Available: $(AVAILABLE_BACKENDS)")
     end

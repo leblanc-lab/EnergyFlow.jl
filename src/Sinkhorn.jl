@@ -536,6 +536,11 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        annealing::Bool = true,
                        n_iter_max::Int = 100_000,
                        strict::Bool = false)
+                       metric::GroundMetric = EuclideanMetric())
+
+    if metric isa GroundMetric && !(metric isa EuclideanMetric)
+        error("sinkhorn backend currently supports only EuclideanMetric().")
+    end
 
     V = Float64
     _unpack(evs) = [_unpack_event(V, ev, gdim) for ev in evs]

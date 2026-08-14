@@ -235,6 +235,10 @@ end
     end
 
     @test_throws ErrorException emd_sinkhorn(ev0, ev1; norm=true, max_iter_sinkhorn=0, strict=true)
+
+@testset "Sinkhorn pairwise metric validation" begin
+    events = [random_event(8) for _ in 1:3]
+    @test_throws ErrorException emds(events; backend=:sinkhorn, metric=EtaPhiMetric())
 end
 
 test_log("\nAll Sinkhorn tests completed!")
