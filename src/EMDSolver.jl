@@ -51,6 +51,9 @@ mutable struct EMDWorkspace{V<:AbstractFloat}
     source_weights::Vector{V}
     target_weights::Vector{V}
 
+    # Last solve diagnostic: scale applied to the normalized internal solve
+    last_scale::V
+
     # Parallel cost fill threshold
     parallel_threshold::Int
 
@@ -93,6 +96,7 @@ function EMDWorkspace{V}(max_n0::Int, max_n1::Int;
         max_n0, max_n1,
         Vector{V}(undef, max_n0 + 1),
         Vector{V}(undef, max_n1 + 1),
+        one(V),
         40_000, # parallel_threshold: parallel cost fill when n0*n1 >= this
         metric,
     )
@@ -196,6 +200,7 @@ function _emd_raw!(ws::EMDWorkspace{V},
 
     # Extract total cost
     emd_val = ws.ns.total_cost
+    ws.last_scale = scale
 
     if !ws.norm
         emd_val *= scale
@@ -287,7 +292,11 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max)
-    return val, _transport_plan(ws.ns; arc_mixing=false)
+    plan = _transport_plan(ws.ns; arc_mixing=false)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -345,7 +354,14 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true)
-    return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
+    if !return_flow
+        return val
+    end
+    plan = _transport_plan(ws.ns; arc_mixing=true)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end
 
 # ═════════════════════════════════════════════════════════════════════
@@ -402,7 +418,11 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     end
 
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
-    return val, _transport_plan(ws.ns; arc_mixing=false)
+    plan = _transport_plan(ws.ns; arc_mixing=false)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end
 
 # ─── emd_ot32! / emd_ot32 — OT-style (arc mixing) Float32 backend ──
@@ -449,5 +469,12 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     n1 = length(w1)
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true)
-    return return_flow ? (val, _transport_plan(ws.ns; arc_mixing=true)) : val
+    if !return_flow
+        return val
+    end
+    plan = _transport_plan(ws.ns; arc_mixing=true)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end

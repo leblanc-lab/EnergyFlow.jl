@@ -134,6 +134,14 @@ test_log("="^70)
         @test ns64_unbalanced_plan ≈ Float64[0.5 0.5]
         @test sink_unbalanced_plan ≈ Float64[0.5 0.5]
 
+        ev_balanced = [50.0 0.0; 50.0 1.0]
+        ns_balanced_val, ns_balanced_plan = emd(ev_balanced, ev_balanced; backend=:ns64, norm=false, return_flow=true)
+        sink_balanced_val, sink_balanced_plan = emd(ev_balanced, ev_balanced; backend=:sinkhorn, norm=false, return_flow=true)
+        @test ns_balanced_val ≈ 0.0 atol=1e-10
+        @test sink_balanced_val ≥ 0.0
+        @test sum(ns_balanced_plan) ≈ 100.0 atol=1e-10
+        @test sum(sink_balanced_plan) ≈ 100.0 atol=1e-8
+
         sink_ws = SinkhornWorkspace(2, 2; beta=1.0, R=1.0, norm=true, epsilon=0.01)
         sink_inplace = emd!(sink_ws, ev0_plan, ev1_plan)
         test_log("  sinkhorn emd! = $sink_inplace")
