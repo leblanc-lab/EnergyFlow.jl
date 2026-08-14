@@ -109,14 +109,48 @@ warning by default or throws when `strict=true`.
 function _handle_solver_status(status::Symbol;
                                strict::Bool = false,
                                backend::Symbol = :ns64,
-                               context::AbstractString = "EMD solve")
+                               context::AbstractString = "EMD solve",
+                               value::Union{Real, Nothing} = nothing)
     status === :optimal && return
+
+    if backend === :sinkhorn && status === :max_iter && value !== nothing && isfinite(value)
+        if strict
+            error("$context failed with backend :$backend (status=:$status). Returned value may be invalid.")
+        end
+        return
+    end
+
     msg = "$context failed with backend :$backend (status=:$status). Returned value may be invalid."
     if strict
         error(msg)
     else
         @warn msg
     end
+end
+
+"""
+    _handle_pairwise_statuses(statuses; strict=false, backend=:ns64,
+                             context="pairwise EMD solve")
+
+Aggregate per-pair solver statuses and emit a single summary warning/error.
+This avoids warning spam in threaded pairwise computations while preserving the
+existing strict mode behavior.
+"""
+function _handle_pairwise_statuses(statuses::AbstractVector{Symbol};
+                                 strict::Bool = false,
+                                 backend::Symbol = :ns64,
+                                 context::AbstractString = "pairwise EMD solve")
+    isempty(statuses) && return
+    bad = count(!isequal(:optimal), statuses)
+    bad == 0 && return
+
+    summary = "$context had $bad out of $(length(statuses)) non-optimal results with backend :$backend."
+    if strict
+        error(summary * " Statuses: $(join(statuses, ", ")).")
+    else
+        @warn summary * " Returned values may be invalid."
+    end
+    return nothing
 end
 
 # ─────────────────────────────────────────────────────────────────────

@@ -76,6 +76,7 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
     npairs = nev * (nev - 1) ÷ 2
 
     results = Vector{V}(undef, npairs)
+    statuses = Vector{Symbol}(undef, npairs)
 
     make_ws() = begin
         w = EMDWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm, metric=metric)
@@ -92,10 +93,11 @@ function _pairwise_emd_self(::Type{V}, events::AbstractVector{<:Tuple{<:Abstract
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
-        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise self solve")
+        statuses[k] = status
         results[k] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
+    _handle_pairwise_statuses(statuses; strict=strict, backend=backend, context="pairwise self solve")
 
     if symmetric
         return results
@@ -132,6 +134,7 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
     max_n = max(max_na, max_nb)
 
     D = Matrix{V}(undef, na, nb)
+    statuses = Vector{Symbol}(undef, na * nb)
 
     npairs = na * nb
     make_ws() = begin
@@ -150,10 +153,11 @@ function _pairwise_emd_cross(::Type{V}, events_a::AbstractVector{<:Tuple{<:Abstr
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
-        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise cross solve")
+        statuses[k] = status
         D[i, j] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
+    _handle_pairwise_statuses(statuses; strict=strict, backend=backend, context="pairwise cross solve")
 
     return D
 end
@@ -174,6 +178,7 @@ function _pairwise_emd_self!(results::AbstractVector{V},
     npairs = nev * (nev - 1) ÷ 2
     @assert length(results) >= npairs "results vector too short"
 
+    statuses = Vector{Symbol}(undef, npairs)
     max_n = maximum(length(e[1]) for e in events)
 
     make_ws() = begin
@@ -191,10 +196,11 @@ function _pairwise_emd_self!(results::AbstractVector{V},
                            convert(Vector{V}, w0), convert(Matrix{V}, c0),
                            convert(Vector{V}, w1), convert(Matrix{V}, c1);
                            max_iter=max_iter, arc_mixing=arc_mixing)
-        _handle_solver_status(status; strict=strict, backend=backend, context="pairwise self! solve")
+        statuses[k] = status
         results[k] = val
     end
     _pairwise_parallel!(npairs, make_ws, work!)
+    _handle_pairwise_statuses(statuses; strict=strict, backend=backend, context="pairwise self! solve")
 
     return results
 end

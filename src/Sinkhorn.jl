@@ -455,7 +455,7 @@ function emd_sinkhorn!(ws::SinkhornWorkspace{V},
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn!")
+    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn!", value=val)
     return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
@@ -504,7 +504,7 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn")
+    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn", value=val)
     return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
 end
 
@@ -556,6 +556,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
         n = length(tuples0)
         npairs = n * (n - 1) ÷ 2
         results = Vector{V}(undef, npairs)
+        statuses = Vector{Symbol}(undef, npairs)
 
         make_ws_self() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
                                               epsilon=epsilon, max_iter=max_iter_sinkhorn,
@@ -566,16 +567,18 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             w1, c1 = tuples0[j]
 
             val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-            _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emds_sinkhorn self pair")
+            statuses[k] = status
             results[k] = val
         end
         _pairwise_parallel!(npairs, make_ws_self, work_self!)
+        _handle_pairwise_statuses(statuses; strict=strict, backend=:sinkhorn, context="emds_sinkhorn self pair")
         return results
     else
         tuples1 = _unpack(events1)
         na = length(tuples0)
         nb = length(tuples1)
         D = Matrix{V}(undef, na, nb)
+        statuses = Vector{Symbol}(undef, na * nb)
 
         npairs = na * nb
         make_ws_cross() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
@@ -588,10 +591,11 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             w1, c1 = tuples1[j]
 
             val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-            _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emds_sinkhorn cross pair")
+            statuses[k] = status
             D[i, j] = val
         end
         _pairwise_parallel!(npairs, make_ws_cross, work_cross!)
+        _handle_pairwise_statuses(statuses; strict=strict, backend=:sinkhorn, context="emds_sinkhorn cross pair")
         return D
     end
 end
