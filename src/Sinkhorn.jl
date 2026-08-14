@@ -535,7 +535,7 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        sinkhorn_tol::Real = 1e-9,
                        annealing::Bool = true,
                        n_iter_max::Int = 100_000,
-                       strict::Bool = false)
+                       strict::Bool = false,
                        metric::GroundMetric = EuclideanMetric())
 
     if metric isa GroundMetric && !(metric isa EuclideanMetric)
