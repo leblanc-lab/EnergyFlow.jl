@@ -234,9 +234,9 @@ function _sinkhorn_plan_dims(ws::SinkhornWorkspace{V},
 
     if !ws.norm
         weight_diff = sum(weights1) - sum(weights0)
-        if weight_diff > sqrt(eps(V))
+        if weight_diff > zero(V)
             n0_eff += 1
-        elseif weight_diff < -sqrt(eps(V))
+        elseif weight_diff < zero(V)
             n1_eff += 1
         end
     end
@@ -318,8 +318,17 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
                              weights1::AbstractVector{V}, coords1::AbstractMatrix{V}) where V
     n0 = length(weights0)
     n1 = length(weights1)
+
+    if n0 == 0 && n1 == 0
+        return zero(V), :optimal
+    end
+
     total0 = sum(weights0)
     total1 = sum(weights1)
+
+    if ws.norm && (total0 == zero(V) || total1 == zero(V))
+        return zero(V), :optimal
+    end
 
     beta = ws.beta
     R = ws.R
@@ -343,11 +352,11 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
     else
         weight_diff = total1 - total0
 
-        if weight_diff > sqrt(eps(V))
+        if weight_diff > zero(V)
             has_fict_source = true
             n0_eff = n0 + 1
             n1_eff = n1
-        elseif weight_diff < -sqrt(eps(V))
+        elseif weight_diff < zero(V)
             has_fict_target = true
             n0_eff = n0
             n1_eff = n1 + 1
@@ -422,6 +431,17 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
         emd_val *= scale
     end
 
+    if status !== :optimal
+        # A non-optimal status may still produce a finite approximate transport
+        # value, especially under warm-start annealing or early stopping. Keep
+        # that value for non-strict callers, but reject truly invalid cases like
+        # zero-iteration runs or non-finite results.
+        if !isfinite(emd_val) || ws.max_iter <= 0
+            return V(NaN), status
+        end
+        return emd_val, status
+    end
+
     return emd_val, status
 end
 
@@ -441,7 +461,8 @@ Returns the regularised transport cost (same precision as the workspace).
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                        gdim::Union{Nothing,Int} = nothing,
-                       return_flow::Bool = false) where V
+                       return_flow::Bool = false,
+                       strict::Bool = false) where V
 
     w0, c0 = _unpack_event(V, ev0, gdim)
     w1, c1 = _unpack_event(V, ev1, gdim)
@@ -488,7 +509,8 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                       sinkhorn_tol::Real = 1e-9,
                       annealing::Bool = true,
                       n_iter_max::Int = 100_000,  # accepted but unused (API compat)
-                      return_flow::Bool = false)
+                      return_flow::Bool = false,
+                      strict::Bool = false)
 
     V = Float64
     w0, c0 = _unpack_event(V, ev0, gdim)
@@ -538,27 +560,28 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        max_iter_sinkhorn::Int = 5000,
                        sinkhorn_tol::Real = 1e-9,
                        annealing::Bool = true,
-                       n_iter_max::Int = 100_000)
+                       n_iter_max::Int = 100_000,
+                       strict::Bool = false,
+                       metric::GroundMetric = EuclideanMetric())
+
+    if metric isa GroundMetric && !(metric isa EuclideanMetric)
+        error("sinkhorn backend currently supports only EuclideanMetric().")
+    end
 
     V = Float64
     _unpack(evs) = [_unpack_event(V, ev, gdim) for ev in evs]
-    tuples0 = _unpack(events0)
-
-    # Find max sizes
-    max_n0 = maximum(length(t[1]) for t in tuples0)
-    max_n1 = max_n0
-
-    if events1 !== nothing
-        tuples1 = _unpack(events1)
-        max_n1 = max(max_n1, maximum(length(t[1]) for t in tuples1))
-    end
-
-    max_n = max(max_n0, max_n1)
 
     if events1 === nothing
-        n = length(tuples0)
+        n = length(events0)
+        if n <= 1
+            return Vector{V}(undef, 0)
+        end
+        tuples0 = _unpack(events0)
+        max_n0 = maximum(length(t[1]) for t in tuples0)
+        max_n = max_n0
         npairs = n * (n - 1) ÷ 2
         results = Vector{V}(undef, npairs)
+        statuses = Vector{Symbol}(undef, npairs)
 
         make_ws_self() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
                                               epsilon=epsilon, max_iter=max_iter_sinkhorn,
@@ -568,16 +591,26 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             w0, c0 = tuples0[i]
             w1, c1 = tuples0[j]
 
-            val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+            val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+            statuses[k] = status
             results[k] = val
         end
         _pairwise_parallel!(npairs, make_ws_self, work_self!)
+        _handle_pairwise_statuses(statuses; strict=strict, backend=:sinkhorn, context="emds_sinkhorn self pair")
         return results
     else
+        tuples0 = _unpack(events0)
         tuples1 = _unpack(events1)
         na = length(tuples0)
         nb = length(tuples1)
+        if na == 0 || nb == 0
+            return Matrix{V}(undef, na, nb)
+        end
+        max_n0 = maximum(length(t[1]) for t in tuples0)
+        max_n1 = maximum(length(t[1]) for t in tuples1)
+        max_n = max(max_n0, max_n1)
         D = Matrix{V}(undef, na, nb)
+        statuses = Vector{Symbol}(undef, na * nb)
 
         npairs = na * nb
         make_ws_cross() = SinkhornWorkspace{V}(max_n, max_n; beta=beta, R=R, norm=norm,
@@ -589,10 +622,12 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
             w0, c0 = tuples0[i]
             w1, c1 = tuples1[j]
 
-            val, _ = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+            val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+            statuses[k] = status
             D[i, j] = val
         end
         _pairwise_parallel!(npairs, make_ws_cross, work_cross!)
+        _handle_pairwise_statuses(statuses; strict=strict, backend=:sinkhorn, context="emds_sinkhorn cross pair")
         return D
     end
 end

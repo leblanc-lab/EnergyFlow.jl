@@ -152,6 +152,26 @@ test_log("="^70)
         @test sink_inplace_flow ≈ sink_inplace atol=1e-10
         @test size(sink_inplace_plan) == (2, 1)
 
+        @testset "empty-event handling" begin
+            empty_ev = Matrix{Float64}(undef, 0, 2)
+            nonempty_ev = reshape([1.0, 0.0], 1, 2)
+
+            @test emd(empty_ev, empty_ev; backend=:ns64, norm=true) == 0.0
+            @test emd(empty_ev, empty_ev; backend=:ns64, norm=false) == 0.0
+            @test emd(empty_ev, nonempty_ev; backend=:ns64, norm=true) == 0.0
+            @test emd(empty_ev, nonempty_ev; backend=:ns64, norm=false) ≈ 1.0 atol=1e-12
+            @test emd(nonempty_ev, empty_ev; backend=:ns64, norm=true) == 0.0
+            @test emd(nonempty_ev, empty_ev; backend=:ns64, norm=false) ≈ 1.0 atol=1e-12
+
+            empty_events = Vector{Matrix{Float64}}()
+            @test isempty(emds(empty_events; backend=:ns64))
+            @test isempty(emds([nonempty_ev]; backend=:ns64))
+            @test size(emds(empty_events, [nonempty_ev]; backend=:ns64)) == (0, 1)
+            @test size(emds([nonempty_ev], empty_events; backend=:ns64)) == (1, 0)
+            @test size(emds(empty_events, [nonempty_ev, nonempty_ev]; backend=:ns64)) == (0, 2)
+            @test size(emds([nonempty_ev, nonempty_ev], empty_events; backend=:ns64)) == (2, 0)
+        end
+
         @test_throws ErrorException emd(ev0, ev1; backend=:bogus)
         @test_throws ErrorException emd!(ws64, ev0, ev1; backend=:bogus)
         @test_throws ErrorException emds(events; backend=:bogus)

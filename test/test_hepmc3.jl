@@ -1,5 +1,6 @@
 using Test
 using EnergyFlow
+using EnergyFlow.HepMC3
 include("test_helpers.jl")
 
 test_log("="^70)
@@ -22,7 +23,7 @@ HepMC::Asciiv3-END_EVENT_LISTING
 
 @testset "HepMC3.Particle default constructor" begin
     test_log("  Particle{Float64}() default constructor")
-    p = EnergyFlow.HepMC3.Particle{Float64}()
+    p = HepMC3.Particle{Float64}()
 
     @test p.status == 0
     @test p.pdgid == 0
@@ -36,8 +37,8 @@ end
 
 @testset "HepMC3.read_events - basic" begin
     test_log("  read_events basic: reading 2-event synthetic stream")
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT)) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT)) do particles
         push!(events, copy(particles))
     end
 
@@ -71,8 +72,8 @@ end
 
 @testset "HepMC3.read_events - maxevents" begin
     test_log("  read_events maxevents=1")
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); maxevents=1) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); maxevents=1) do particles
         push!(events, copy(particles))
     end
 
@@ -83,8 +84,8 @@ end
 
 @testset "HepMC3.read_events - skipevents" begin
     test_log("  read_events skipevents=1")
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); skipevents=1) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); skipevents=1) do particles
         push!(events, copy(particles))
     end
 
@@ -95,8 +96,8 @@ end
 
 @testset "HepMC3.read_events - END_EVENT_LISTING sentinel" begin
     content_with_extra = _HEPMC3_CONTENT * "E 99 0 0\nP 5 0 999 0.0 0.0 0.0 1.0 0.0 1\n"
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(content_with_extra)) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(content_with_extra)) do particles
         push!(events, copy(particles))
     end
 
@@ -106,8 +107,8 @@ end
 
 @testset "HepMC3.read_events - maxevents early break in E chain" begin
     test_log("  read_events maxevents=0 should break on second E line")
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); maxevents=0) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(_HEPMC3_CONTENT); maxevents=0) do particles
         push!(events, copy(particles))
     end
 
@@ -128,8 +129,8 @@ HepMC::Asciiv3-END_EVENT_LISTING
 """
 
     test_log("  single event with skipevents=1 should emit no events")
-    events = Vector{Vector{EnergyFlow.HepMC3.Particle{Float64}}}()
-    EnergyFlow.HepMC3.read_events(IOBuffer(single_event_content); skipevents=1) do particles
+    events = Vector{Vector{HepMC3.Particle{Float64}}}()
+    HepMC3.read_events(IOBuffer(single_event_content); skipevents=1) do particles
         push!(events, copy(particles))
     end
 
