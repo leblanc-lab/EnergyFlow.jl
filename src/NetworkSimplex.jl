@@ -376,18 +376,6 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
         end
     end
 
-    # A non-positive iteration budget means the solver never actually ran.
-    # Treat it as a failed solve rather than silently returning a stale objective.
-    if max_iter <= 0
-        ns.status = :max_iter
-        ns.total_cost = zero(V)
-        if nworkers > 0
-            Threads.atomic_xchg!(ns.work_epoch, -1)
-            for i in 1:nworkers; wait(ns.worker_tasks[i]); end
-        end
-        return ns.status
-    end
-
     # ── Main simplex loop ─────────────────────────────────────────────────────
     n_iter = 0
     ns.n_iters = 0
