@@ -469,6 +469,7 @@ function emd_sinkhorn!(ws::SinkhornWorkspace{V},
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+    _handle_solver_status(_status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn!", value=val)
     if !return_flow
         return val
     end
@@ -524,6 +525,7 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
     val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+    _handle_solver_status(_status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn", value=val)
     if !return_flow
         return val
     end

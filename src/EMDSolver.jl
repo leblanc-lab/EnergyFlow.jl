@@ -118,8 +118,9 @@ function _handle_solver_status(status::Symbol;
     status === :optimal && return
 
     if backend === :sinkhorn && status === :max_iter && value !== nothing && isfinite(value)
+        msg = "$context failed with backend :$backend (status=:$status). Returned value may be invalid."
         if strict
-            error("$context failed with backend :$backend (status=:$status). Returned value may be invalid.")
+            error(msg)
         end
         return
     end
@@ -263,10 +264,15 @@ function _emd_raw!(ws::EMDWorkspace{V},
     emd_val = ws.ns.total_cost
     ws.last_scale = scale
 
-    # Extract total cost only on successful solve.
-    emd_val = ws.ns.total_cost
+    # A non-optimal solve can still leave a finite objective in the workspace,
+    # but callers expect invalid results to be rejected rather than silently
+    # returned. Preserve finite values only for successful solves.
     if !ws.norm
         emd_val *= scale
+    end
+
+    if status !== :optimal && (!isfinite(emd_val) || max_iter <= 0)
+        return V(NaN), status
     end
 
     return emd_val, status
@@ -359,6 +365,7 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w0), convert(Matrix{V}, c0),
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max)
+    _handle_solver_status(_status; strict=strict, backend=:ns64, context="emd_ns64")
     plan = _transport_plan(ws.ns; arc_mixing=false)
     if !ws.norm
         plan .*= ws.last_scale
@@ -425,8 +432,10 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                              convert(Vector{V}, w1), convert(Matrix{V}, c1);
                              max_iter=n_iter_max, arc_mixing=true)
     if !return_flow
+        _handle_solver_status(_status; strict=strict, backend=:ot64, context="emd_ot64")
         return val
     end
+    _handle_solver_status(_status; strict=strict, backend=:ot64, context="emd_ot64")
     plan = _transport_plan(ws.ns; arc_mixing=true)
     if !ws.norm
         plan .*= ws.last_scale
@@ -492,6 +501,7 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     end
 
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max)
+    _handle_solver_status(_status; strict=strict, backend=:ns32, context="emd_ns32")
     plan = _transport_plan(ws.ns; arc_mixing=false)
     if !ws.norm
         plan .*= ws.last_scale
@@ -547,8 +557,10 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
     ws = EMDWorkspace{Float32}(n0, n1; beta=beta, R=R, norm=norm, metric=metric)
     val, _status = _emd_raw!(ws, w0, c0, w1, c1; max_iter=n_iter_max, arc_mixing=true)
     if !return_flow
+        _handle_solver_status(_status; strict=strict, backend=:ot32, context="emd_ot32")
         return val
     end
+    _handle_solver_status(_status; strict=strict, backend=:ot32, context="emd_ot32")
     plan = _transport_plan(ws.ns; arc_mixing=true)
     if !ws.norm
         plan .*= ws.last_scale
