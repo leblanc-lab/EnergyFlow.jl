@@ -39,7 +39,7 @@ workspace and used by every solve.
 
 See also [`SinkhornWorkspace`](@ref).
 """
-mutable struct EMDWorkspace{V<:AbstractFloat}
+mutable struct EMDWorkspace{V<:AbstractFloat, M<:GroundMetric}
     ns::NetworkSimplexSolver{V}
     beta::V
     R::V
@@ -54,8 +54,8 @@ mutable struct EMDWorkspace{V<:AbstractFloat}
     # Parallel cost fill threshold
     parallel_threshold::Int
 
-    # Ground distance metric (default: EuclideanMetric)
-    metric::GroundMetric
+    # Ground distance metric
+    metric::M
 end
 
 """
@@ -88,7 +88,7 @@ function EMDWorkspace{V}(max_n0::Int, max_n1::Int;
                          metric::GroundMetric = EuclideanMetric()) where V
     # +1 for possible fictitious particle
     ns = NetworkSimplexSolver{V}(max_n0 + 1, max_n1 + 1)
-    EMDWorkspace{V}(
+    EMDWorkspace{V, typeof(metric)}(
         ns, V(beta), V(R), norm,
         max_n0, max_n1,
         Vector{V}(undef, max_n0 + 1),
