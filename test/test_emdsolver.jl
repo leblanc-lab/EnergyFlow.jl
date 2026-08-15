@@ -109,9 +109,9 @@ end
     ]
 
     # Trigger the internal branch that reconstructs a full symmetric matrix from flat results
-    D = EnergyFlow._pairwise_emd_self(Float64, events;
-                                      beta=1.0, R=1.0, norm=true,
-                                      max_iter=10_000, symmetric=false)
+    D = EnergyFlow._pairwise_emd_self(EnergyFlow.NS64, events;
+                                        beta=1.0, R=1.0, norm=true,
+                                        max_iter=10_000, symmetric=false)
 
     test_log("  pairwise reconstruction: matrix size=$(size(D))")
     test_log("  pairwise reconstruction: D[1,2]=$(D[1,2]) D[1,3]=$(D[1,3]) D[2,3]=$(D[2,3])")

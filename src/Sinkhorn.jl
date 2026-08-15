@@ -445,13 +445,16 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd_sinkhorn!(ws::SinkhornWorkspace, ev0, ev1; gdim=nothing)
+    emd_sinkhorn!(ws::SinkhornWorkspace, ev0, ev1; gdim=nothing,
+                  return_flow=false, strict=false)
 
 Compute an approximate EMD using the Sinkhorn backend with a pre-allocated
 [`SinkhornWorkspace`](@ref). All Sinkhorn parameters (`beta`, `R`, `norm`,
 `epsilon`, `tol`, `annealing`, `max_iter`) are read from the workspace.
 
 Returns the regularised transport cost (same precision as the workspace).
+If `return_flow=true`, also returns the transport plan. With `strict=true`,
+failure to converge raises an error instead of returning a warned value.
 """
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
@@ -471,7 +474,7 @@ end
 """
     emd_sinkhorn(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
                  epsilon=0.01, max_iter_sinkhorn=5000, sinkhorn_tol=1e-9,
-                 annealing=true) -> Float64
+                 annealing=true, return_flow=false, strict=false) -> Float64
 
 Compute an approximate EMD between two events using the Sinkhorn
 (entropy-regularised OT) solver. Allocates a fresh workspace each call; for
@@ -484,6 +487,10 @@ repeated calls prefer [`emd_sinkhorn!`](@ref).
 - `max_iter_sinkhorn`: maximum Sinkhorn iterations per ε-level.
 - `sinkhorn_tol`: convergence tolerance on the marginal violation.
 - `annealing`: use ε-annealing with warm starts (default `true`).
+- `n_iter_max`: accepted for compatibility with [`emd`](@ref) and ignored;
+  use `max_iter_sinkhorn` to control Sinkhorn iterations.
+- `return_flow`: if `true`, also return the transport plan.
+- `strict`: if `true`, raise an error when the solver does not converge.
 
 The returned value includes an entropic bias relative to the exact EMD; see
 [`SinkhornWorkspace`](@ref).
@@ -532,6 +539,8 @@ pairs. Return conventions match [`emds`](@ref): a flat upper-triangular
 `Matrix{Float64}` for cross-pairwise mode.
 
 Sinkhorn-specific keywords are as in [`emd_sinkhorn`](@ref).
+`n_iter_max` is accepted for compatibility with [`emds`](@ref) and ignored;
+use `max_iter_sinkhorn` to control Sinkhorn iterations.
 """
 function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        events1::Union{Nothing, AbstractVector{<:AbstractMatrix{<:Real}}} = nothing;
@@ -547,8 +556,10 @@ function emds_sinkhorn(events0::AbstractVector{<:AbstractMatrix{<:Real}},
                        strict::Bool = false,
                        metric::GroundMetric = EuclideanMetric())
 
-    if metric isa GroundMetric && !(metric isa EuclideanMetric)
-        error("sinkhorn backend currently supports only EuclideanMetric().")
+    if !(metric isa EuclideanMetric)
+        throw(ArgumentError(
+            "the Sinkhorn backend currently supports only EuclideanMetric()"
+        ))
     end
 
     V = Float64

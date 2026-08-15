@@ -57,6 +57,18 @@ using EnergyFlow
 
         sph = sphere_reference(1)
         @test event_isotropy(sph; geometry=:sphere, nval=1) ≈ 0.0 atol=1e-10
+
+        @test event_isotropy(
+            ring, ring, ring_cos_metric();
+            backend=EnergyFlow.NS64,
+        ) ≈ 0.0 atol=1e-10
+
+        @test event_isotropy(
+            ring_event;
+            geometry=:ring,
+            n=4,
+            backend=EnergyFlow.NS64,
+        ) ≈ 0.0 atol=1e-10
     end
 
     @testset "hepmc3 momenta loader" begin

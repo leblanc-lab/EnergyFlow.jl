@@ -19,8 +19,21 @@ include("test_helpers.jl")
 
     @testset "Backend management" begin
         @test get_backend() == :ns64
+
+        for (symbol, strategy) in (
+            (:ns64, EnergyFlow.NS64),
+            (:ot64, EnergyFlow.OT64),
+            (:ns32, EnergyFlow.NS32),
+            (:ot32, EnergyFlow.OT32),
+            (:sinkhorn, EnergyFlow.Sinkhorn),
+        )
+            @test strategy isa EnergyFlow.EMDBackend
+            @test set_backend(strategy) == symbol
+            @test get_backend() == symbol
+        end
+
         @test set_backend(:ns64) == :ns64
-        @test_throws ErrorException set_backend(:nonexistent)
+        @test_throws ArgumentError set_backend(:nonexistent)
     end
 
     @testset "emd_ns64 — identical distributions" begin

@@ -241,9 +241,13 @@ reference event `ref` using the supplied ground `metric`. The isotropy
 normalization is baked into the reference and metric, so the EMD is evaluated
 with `R=1`, `beta=1`, `norm=true`. If `recoil=true`, a single pseudo-particle
 is added to balance the event's net momentum before evaluating the EMD.
+`backend` may be a compatibility symbol such as `:ns64` or a typed strategy
+such as `EnergyFlow.NS64`.
 """
-function event_isotropy(event, ref, metric; backend::Symbol=:ns64, n_iter_max::Int=100_000,
-                         recoil::Bool=false)
+function event_isotropy(event, ref, metric;
+                        backend::Union{Symbol,EMDBackend}=:ns64,
+                        n_iter_max::Int=100_000,
+                        recoil::Bool=false)
     event_corr = _maybe_recoil_correct(event, ref, recoil)
     emd(event_corr, ref; R=1.0, beta=1.0, norm=true, metric=metric,
         backend=backend, n_iter_max=n_iter_max)
@@ -266,6 +270,7 @@ For `:cylinder`, particles with `|y| > ymax` are dropped before evaluation.
 For `:sphere`, zero-momentum particles are dropped before evaluation.
 Set `recoil=true` to append a balancing pseudo-particle before the EMD is
 computed, which is useful when the input event has residual net momentum.
+`backend` accepts either a compatibility symbol or a typed backend strategy.
 """
 function event_isotropy(event::AbstractMatrix{<:Real};
                         geometry::Symbol=:ring,
@@ -273,7 +278,7 @@ function event_isotropy(event::AbstractMatrix{<:Real};
                         nphi::Int=16,
                         ymax::Real=4.0,
                         nval::Int=2,
-                        backend::Symbol=:ns64,
+                        backend::Union{Symbol,EMDBackend}=:ns64,
                         n_iter_max::Int=100_000,
                         recoil::Bool=false)
     if geometry === :ring

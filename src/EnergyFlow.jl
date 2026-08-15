@@ -29,13 +29,18 @@ the ground-space coordinates (typically rapidity ``y`` and azimuth ``\\phi``).
 
 # Backends
 `:ns64` (default), `:ot64`, `:ns32`, `:ot32` (exact network simplex variants)
-and `:sinkhorn` (approximate entropic OT). See [`set_backend`](@ref).
+and `:sinkhorn` (approximate entropic OT). The high-level APIs also accept the
+corresponding typed strategies, such as `EnergyFlow.NS64`. See
+[`set_backend`](@ref).
 
 # Ground metrics
 [`EuclideanMetric`](@ref) (default), [`SquaredEuclideanMetric`](@ref),
 [`EtaPhiMetric`](@ref), [`PrecomputedMetric`](@ref), [`CustomMetric`](@ref).
 """
 module EnergyFlow
+
+# Backend strategy types
+include("BackendTypes.jl")
 
 # Core solver
 include("NetworkSimplex.jl")
