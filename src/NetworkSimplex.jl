@@ -6,6 +6,9 @@
     2. Kara, Özturan, Parallel network simplex algorithm for the minimum cost flow
        (the basis for the :parallel_block pivot mode)
 
+    Portions adapted from LEMON's Network Simplex implementation.
+    See THIRD_PARTY_NOTICE.md for copyright and license details.
+
     - Block-search pivot with epsilon-scaled stopping criterion
     - succ_num-based LCA (not depth-based)
     - forwards[] flag per node for arc direction
