@@ -163,7 +163,7 @@ def event_isotropy(weights, M, ref_weights):
 def select_events(events, ymax, min_particles=2):
     """Acceptance preselection: |y| <= ymax, drop events with < min_particles.
 
-    Must match select_events in isotropy_defs.jl for a fair comparison.
+    Must match EnergyFlow.select_rapidity for a fair comparison.
     """
     out = []
     for ev in events:
@@ -176,7 +176,7 @@ def select_events(events, ymax, min_particles=2):
 def select_sphere_events(events, min_particles=2):
     """Drop zero-momentum particles and events with < min_particles.
 
-    Must match select_sphere_events in isotropy_defs.jl.
+    Must match EnergyFlow.select_sphere_events for a fair comparison.
     """
     out = []
     for ev in events:

@@ -10,11 +10,12 @@ makedocs(
     format=Documenter.HTML(
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://leblanc-lab.github.io/EnergyFlow.jl/stable",
+        edit_link="main",
     ),
     pages=[
         "Home" => "index.md",
         "Manual" => [
-            "Just Run It (No Julia Experience)" => "man/just_run_it.md",
+            "Quick Start for New Julia Users" => "man/just_run_it.md",
             "Getting Started" => "man/getting_started.md",
             "Tutorial" => "man/tutorial.md",
             "Backends and Metrics" => "man/backends_and_metrics.md",

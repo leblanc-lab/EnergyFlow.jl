@@ -2,9 +2,9 @@
 
 ## Solver Backends
 
-`EnergyFlow.jl` ships several solver backends. All of the network-simplex
-variants are **exact** (they solve the linear program to optimality); the
-Sinkhorn backend is **approximate** but can be faster for large events.
+`EnergyFlow.jl` ships several solver backends. The network-simplex variants
+target the exact linear-program optimum; the Sinkhorn backend solves an
+entropy-regularized approximation and can be faster for large events.
 
 | Backend     | Solver                             | Precision | Exact? |
 |:------------|:-----------------------------------|:----------|:-------|
@@ -45,15 +45,15 @@ pairwise/in-place variants) — see the [API Reference](../api.md).
 - **`:ns64`** (the default) is a robust exact solver — a good starting point
   for most workloads.
 - **`:ot64`** uses POT-style *arc mixing*: bipartite arcs are interleaved so
-  that each pivot block samples arcs from many source particles. This often
-  speeds up convergence significantly for unbalanced problems
+  that each pivot block samples arcs from many source particles. This can
+  improve convergence for unbalanced problems
   (`norm=false` with very different event weights).
 - **`:ns32` / `:ot32`** trade precision for memory and speed. The cost matrix
   dominates memory usage (`n0 × n1` values), so halving the element size can
   matter for large events. EMD values are returned as `Float32`.
-- **`:sinkhorn`** solves the entropy-regularised problem. The result carries a
-  small bias controlled by `epsilon` (smaller `epsilon` → closer to exact, but
-  more iterations). Use it when approximate distances suffice.
+- **`:sinkhorn`** solves the entropy-regularized problem. The result carries a
+  bias controlled by `epsilon` (smaller `epsilon` → closer to exact, but
+  typically more iterations). Use it when approximate distances suffice.
 
 ```julia
 # Sinkhorn with a tighter regularisation
@@ -64,6 +64,14 @@ val = emd_sinkhorn(ev0, ev1; epsilon=0.005, annealing=true)
 !!! note
     `emds!` (in-place pairwise) is not available for the `:sinkhorn` backend;
     use `emds` instead.
+
+### Convergence
+
+All solvers have iteration limits. The exact backends warn and return `NaN`
+when they stop without an optimal solution. Sinkhorn may return a finite last
+iterate that has not met its marginal tolerance. Pass `strict=true` to `emd`
+or `emds` when a non-optimal status must be an error. After a workspace-based
+Sinkhorn solve, inspect `ws.converged` and `ws.n_iters` for diagnostics.
 
 ## Ground Metrics
 
@@ -129,5 +137,5 @@ val = emd(ev0, ev1; metric=manhattan)
     `CustomMetric` always fill serially.
 
 !!! note
-    The `:sinkhorn` backend currently always uses the Euclidean ground
-    distance and ignores the `metric` keyword.
+    The `:sinkhorn` backend currently supports only `EuclideanMetric()`.
+    Passing another metric through `emd` or `emds` raises `ArgumentError`.

@@ -2,6 +2,16 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "EnergyFlow.jl"
 type: software
+version: "0.1.0"
+abstract: >-
+  A Julia package for computing the Energy Mover's Distance between collider
+  events, with exact and approximate optimal-transport backends, configurable
+  ground metrics, pairwise computations, and event-isotropy utilities.
+keywords:
+  - energy mover's distance
+  - optimal transport
+  - collider physics
+  - Julia
 authors:
   - family-names: LeBlanc
     given-names: Matt

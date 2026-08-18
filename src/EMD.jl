@@ -136,11 +136,12 @@ end
 
 """
     emd!(ws, ev0, ev1; backend=get_backend(), gdim=nothing,
-         n_iter_max=100_000, metric=nothing, strict=false)
+         n_iter_max=100_000, metric=nothing, return_flow=false, strict=false)
 
-Compute the EMD between two events using a pre-allocated workspace,
-avoiding per-call allocations. This is the fastest path when computing many
-EMDs in a loop.
+Compute the EMD between two events using a pre-allocated workspace. This reuses
+the solver's large internal buffers and reduces per-call allocations when
+computing many EMDs in a loop. Temporary arrays are still allocated while the
+public API unpacks each event matrix.
 
 The EMD parameters (`beta`, `R`, and `norm`) are read from the workspace.
 For an `EMDWorkspace`, `metric=nothing` uses the workspace metric and an
@@ -266,7 +267,8 @@ end
 
 """
     emd(ev0, ev1; backend=get_backend(), R=1.0, beta=1.0, norm=false,
-        gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(), return_flow=false)
+        gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+        return_flow=false, strict=false)
 
 Compute the Energy Mover's Distance between two events. Allocates a fresh
 workspace each call; for repeated calls prefer [`emd!`](@ref) with a
@@ -379,11 +381,13 @@ end
 
 """
     emds!(results, events0; backend=get_backend(), R=1.0, beta=1.0, norm=false,
-          gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
+          gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+          strict=false)
 
-In-place self-pairwise EMD: computes all `n*(n-1)/2` pairwise distances among
-`events0` and writes them into the pre-allocated `results` vector (flat
-upper-triangular, SciPy `pdist` row-major order — see [`emds`](@ref)).
+Preallocated-output self-pairwise EMD: computes all `n*(n-1)/2` pairwise
+distances among `events0` and writes them into `results` (flat
+upper-triangular, SciPy `pdist` row-major order — see [`emds`](@ref)). Internal
+worker workspaces are created for each call.
 
 Computation is multithreaded over pairs. Keywords are as in [`emds`](@ref).
 The `results` element type must match the exact backend precision. Sinkhorn is
@@ -445,7 +449,8 @@ end
 
 """
     emds(events0, events1=nothing; backend=get_backend(), R=1.0, beta=1.0,
-         norm=false, gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric())
+         norm=false, gdim=nothing, n_iter_max=100_000,
+         metric=EuclideanMetric(), strict=false)
 
 Compute pairwise Energy Mover's Distances between collections of events.
 Computation is multithreaded over pairs (start Julia with `-t auto` or set

@@ -20,7 +20,7 @@ final-state particles only:
 ```julia
 using EnergyFlow
 
-datafile = joinpath("data", "sk_example_PU.hepmc")
+datafile = joinpath(pkgdir(EnergyFlow), "data", "sk_example_PU.hepmc")
 events = load_hepmc3_events(datafile; maxevents=20)
 
 println("Loaded $(length(events)) events")
@@ -115,13 +115,14 @@ pre-allocate an [`EMDWorkspace`](@ref) sized for your largest events and use
 n = maximum(size(e, 1) for e in events)
 ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
 
-# e.g. distances from event 1 to all others — no allocation per call
+# Distances from event 1 to all others, reusing the solver workspace
 d1 = [emd!(ws, events[1], e) for e in events[2:end]]
 ```
 
 The EMD parameters are fixed in the workspace; create separate workspaces for
-different parameter settings. For the Sinkhorn backend use a
-[`SinkhornWorkspace`](@ref) instead.
+different parameter settings. The public `emd!` path still allocates temporary
+arrays while unpacking each event, but reuses the much larger solver buffers.
+For the Sinkhorn backend use a [`SinkhornWorkspace`](@ref) instead.
 
 ## 6. Threading
 
@@ -143,7 +144,10 @@ The complete example, ready to run:
 using EnergyFlow
 
 # Load events from HepMC3
-events = load_hepmc3_events(joinpath("data", "sk_example_PU.hepmc"); maxevents=20)
+events = load_hepmc3_events(
+    joinpath(pkgdir(EnergyFlow), "data", "sk_example_PU.hepmc");
+    maxevents=20,
+)
 println("Loaded $(length(events)) events")
 
 # ── Single EMD ──

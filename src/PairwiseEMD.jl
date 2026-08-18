@@ -322,15 +322,17 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emds_ns64(events0, events1=nothing; R=1.0, beta=1.0, norm=false, gdim=nothing,
-              n_iter_max=100_000)
+    emds_ns64(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
+              gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+              strict=false)
 
 Compute pairwise EMDs using the Network Simplex Float64 backend.
 
 # Arguments
 - `events0`: Vector of event matrices (each M x (1+gdim)).
 - `events1`: `nothing` for self-pairwise, or a second Vector of events for cross-pairwise.
-- `R`, `beta`, `norm`, `gdim`, `n_iter_max`: same as `emd_ns64`.
+- `R`, `beta`, `norm`, `gdim`, `n_iter_max`, `metric`, `strict`: same as
+  [`emd_ns64`](@ref).
 
 # Returns
 - Self-pairwise (`events1=nothing`): `Vector{Float64}` of length `n*(n-1)/2`
@@ -361,10 +363,11 @@ end
 
 """
     emds_ns64!(results, events0; R=1.0, beta=1.0, norm=false, gdim=nothing,
-               n_iter_max=100_000)
+               n_iter_max=100_000, metric=EuclideanMetric(), strict=false)
 
-In-place version: writes pairwise EMD values to pre-allocated `results` vector
-(flat upper-triangular, length n*(n-1)/2).
+Writes pairwise EMD values to the preallocated `results` vector (flat
+upper-triangular, length `n*(n-1)/2`). Internal worker workspaces are created
+for each call.
 """
 function emds_ns64!(results::AbstractVector{Float64},
                     events0::AbstractVector{<:AbstractMatrix{<:Real}};
@@ -386,8 +389,9 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emds_ot64(events0, events1=nothing; R=1.0, beta=1.0, norm=false, gdim=nothing,
-              n_iter_max=100_000)
+    emds_ot64(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
+              gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+              strict=false)
 
 Pairwise EMDs using the OT-style Float64 backend (arc mixing enabled).
 See `emds_ns64` for argument documentation.
@@ -416,7 +420,7 @@ end
 
 """
     emds_ot64!(results, events0; R=1.0, beta=1.0, norm=false, gdim=nothing,
-               n_iter_max=100_000)
+               n_iter_max=100_000, metric=EuclideanMetric(), strict=false)
 
 In-place pairwise EMDs using the OT-style Float64 backend (arc mixing enabled).
 See `emds_ns64!` for argument documentation.
@@ -441,8 +445,9 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emds_ns32(events0, events1=nothing; R=1.0, beta=1.0, norm=false, gdim=nothing,
-              n_iter_max=100_000)
+    emds_ns32(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
+              gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+              strict=false)
 
 Pairwise EMDs using the Network Simplex Float32 backend.
 Returns `Vector{Float32}` (self) or `Matrix{Float32}` (cross).
@@ -471,7 +476,7 @@ end
 
 """
     emds_ns32!(results, events0; R=1.0, beta=1.0, norm=false, gdim=nothing,
-               n_iter_max=100_000)
+               n_iter_max=100_000, metric=EuclideanMetric(), strict=false)
 
 In-place pairwise EMDs using the Network Simplex Float32 backend.
 """
@@ -495,8 +500,9 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emds_ot32(events0, events1=nothing; R=1.0, beta=1.0, norm=false, gdim=nothing,
-              n_iter_max=100_000)
+    emds_ot32(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
+              gdim=nothing, n_iter_max=100_000, metric=EuclideanMetric(),
+              strict=false)
 
 Pairwise EMDs using the OT-style Float32 backend (arc mixing enabled).
 """
@@ -524,7 +530,7 @@ end
 
 """
     emds_ot32!(results, events0; R=1.0, beta=1.0, norm=false, gdim=nothing,
-               n_iter_max=100_000)
+               n_iter_max=100_000, metric=EuclideanMetric(), strict=false)
 
 In-place pairwise EMDs using the OT-style Float32 backend (arc mixing enabled).
 """

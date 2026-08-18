@@ -1,24 +1,33 @@
-# I Don't Know Julia — Just Run It
+# Quick Start for New Julia Users
 
 You have some events and want an EMD number out, without learning Julia first.
 Copy-paste your way down this page.
 
 ## 1. Install Julia
 
-In a terminal (PowerShell on Windows):
+On macOS or Linux:
 
 ```bash
-curl -fsSL https://install.julialang.org | sh    # Windows: winget install julia -s msstore
+curl -fsSL https://install.julialang.org | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+winget install julia -s msstore
 ```
 
 Reopen the terminal, then confirm with `julia --version`.
 
 ## 2. Install EnergyFlow (once)
 
-Start Julia by typing `julia`, then at the `julia>` prompt run:
+Start Julia by typing `julia`, then at the `julia>` prompt run. EnergyFlow.jl
+is installed from GitHub until it is registered in Julia's General registry:
 
 ```julia
-using Pkg; Pkg.add(["EnergyFlow", "NPZ"])
+using Pkg
+Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+Pkg.add("NPZ")
 ```
 
 First time only; it takes a few minutes. (`NPZ` reads the `.npz` files below.)
@@ -40,8 +49,9 @@ events = data["events"]               # <-- key holding the event array
 event_A = events[1, :, 1:3]           # <-- first event
 event_B = events[2, :, 1:3]           # <-- second event
 
-# norm=true compares shapes only; R sets the distance scale. Leave as-is if unsure.
-distance = emd(event_A, event_B; R=1.0, beta=1.0, norm=true)
+# norm=true compares shapes only; EtaPhiMetric wraps the phi coordinate.
+distance = emd(event_A, event_B;
+               R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 println("EMD = ", distance)
 ```
 

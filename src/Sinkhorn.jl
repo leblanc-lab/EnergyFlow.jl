@@ -5,7 +5,7 @@
 
     Implements log-domain Sinkhorn with ε-annealing for numerical stability.
     Provides both workspace-reusing and allocating API functions that match
-    the NSSolver.jl patterns (emd_sinkhorn! / emd_sinkhorn).
+    the EMDSolver.jl patterns (emd_sinkhorn! / emd_sinkhorn).
 
     NOTE: Sinkhorn solves the *regularised* OT problem:
         OT_ε(a,b,C) = min_{P ∈ U(a,b)} ⟨C,P⟩ + ε H(P)
@@ -24,7 +24,9 @@
 
 Pre-allocated workspace for approximate EMD computation with the Sinkhorn
 (entropy-regularised OT) backend. Pass to [`emd!`](@ref) or `emd_sinkhorn!`.
-The unparameterized constructor defaults to `Float64`.
+The workspace reuses the solver's internal buffers, although the public
+event-matrix APIs still allocate temporary arrays while unpacking inputs. The
+unparameterized constructor defaults to `Float64`.
 
 # Arguments
 - `max_n0`, `max_n1`: maximum particle counts of the two events in any
@@ -458,8 +460,9 @@ Compute an approximate EMD using the Sinkhorn backend with a pre-allocated
 `epsilon`, `tol`, `annealing`, `max_iter`) are read from the workspace.
 
 Returns the regularised transport cost (same precision as the workspace).
-If `return_flow=true`, also returns the transport plan. With `strict=true`,
-failure to converge raises an error instead of returning a warned value.
+If `return_flow=true`, also returns the transport plan. A finite last iterate
+may be returned when convergence is not reached; inspect `ws.converged`, or set
+`strict=true` to raise an error on non-convergence.
 """
 function emd_sinkhorn!(ws::SinkhornWorkspace{V},
                        ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
@@ -486,7 +489,8 @@ end
 """
     emd_sinkhorn(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
                  epsilon=0.01, max_iter_sinkhorn=5000, sinkhorn_tol=1e-9,
-                 annealing=true, return_flow=false, strict=false) -> Float64
+                 annealing=true, n_iter_max=100_000, return_flow=false,
+                 strict=false) -> Float64
 
 Compute an approximate EMD between two events using the Sinkhorn
 (entropy-regularised OT) solver. Allocates a fresh workspace each call; for
@@ -502,7 +506,8 @@ repeated calls prefer [`emd_sinkhorn!`](@ref).
 - `n_iter_max`: accepted for compatibility with [`emd`](@ref) and ignored;
   use `max_iter_sinkhorn` to control Sinkhorn iterations.
 - `return_flow`: if `true`, also return the transport plan.
-- `strict`: if `true`, raise an error when the solver does not converge.
+- `strict`: if `true`, raise an error when the solver does not converge;
+  otherwise a finite last iterate may be returned.
 
 The returned value includes an entropic bias relative to the exact EMD; see
 [`SinkhornWorkspace`](@ref).
@@ -550,7 +555,8 @@ end
 """
     emds_sinkhorn(events0, events1=nothing; R=1.0, beta=1.0, norm=false,
                   gdim=nothing, epsilon=0.01, max_iter_sinkhorn=5000,
-                  sinkhorn_tol=1e-9, annealing=true)
+                  sinkhorn_tol=1e-9, annealing=true, n_iter_max=100_000,
+                  strict=false, metric=EuclideanMetric())
 
 Pairwise approximate EMDs using the Sinkhorn backend, multithreaded over
 pairs. Return conventions match [`emds`](@ref): a flat upper-triangular
