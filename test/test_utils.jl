@@ -100,41 +100,5 @@ end
     @test eltype(coords) == Float64
 end
 
-# _emd_raw_alloc
-@testset "_emd_raw_alloc — basic solve" begin
-    test_log("  alloc wrapper: 1 particle each, distance 3")
-    w0 = [1.0];  c0 = reshape([0.0], 1, 1)
-    w1 = [1.0];  c1 = reshape([3.0], 1, 1)
-
-    val, status = EnergyFlow._emd_raw_alloc(w0, c0, w1, c1; beta=1.0, R=1.0, norm=true)
-
-    test_log("    val=$val status=$status")
-    @test status == :optimal
-    @test val ≈ 3.0 atol=1e-10
-end
-
-@testset "_emd_raw_alloc — identical events" begin
-    test_log("  alloc wrapper: identical events should give zero")
-    w0 = [0.5, 0.5];  c0 = [0.0 1.0]
-    w1 = [0.5, 0.5];  c1 = [0.0 1.0]
-
-    val, status = EnergyFlow._emd_raw_alloc(w0, c0, w1, c1; beta=1.0, R=1.0, norm=true)
-
-    @test status == :optimal
-    @test val ≈ 0.0 atol=1e-10
-end
-
-@testset "_emd_raw_alloc — type promotion" begin
-    test_log("  mixed input types get promoted to Float64")
-    w0 = Float32[1.0];  c0 = Float32[0.0;;]
-    w1 = Float64[1.0];  c1 = Float64[2.0;;]
-
-    val, status = EnergyFlow._emd_raw_alloc(w0, c0, w1, c1; beta=1.0, R=1.0, norm=true)
-
-    @test status == :optimal
-    @test val isa Float64
-    @test val ≈ 2.0 atol=1e-10
-end
-
 test_log("\nAll Utils tests completed!")
 

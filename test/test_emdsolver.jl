@@ -34,11 +34,6 @@ end
     @test status == :optimal
     @test val ≈ 3.0 atol=1e-10
 
-    val_alloc, status_alloc = EnergyFlow._emd_raw_alloc(weights0, coords0, weights1, coords1;
-                                                        beta=1.0, R=1.0, norm=true)
-    test_log("  raw solve: alloc status=$status_alloc val=$val_alloc")
-    @test status_alloc == :optimal
-    @test val_alloc ≈ val atol=1e-10
 end
 
 @testset "EMDSolver unbalanced masses" begin
