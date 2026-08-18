@@ -21,12 +21,11 @@ Reopen the terminal, then confirm with `julia --version`.
 
 ## 2. Install EnergyFlow (once)
 
-Start Julia by typing `julia`, then at the `julia>` prompt run. EnergyFlow.jl
-is installed from GitHub until it is registered in Julia's General registry:
+Start Julia by typing `julia`, then at the `julia>` prompt run:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+Pkg.add("EnergyFlow")
 Pkg.add("NPZ")
 ```
 

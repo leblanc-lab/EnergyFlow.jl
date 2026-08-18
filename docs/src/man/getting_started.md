@@ -2,12 +2,11 @@
 
 ## Installation
 
-EnergyFlow.jl requires Julia 1.9 or later. Until it is registered in Julia's
-General registry, install it directly from GitHub:
+EnergyFlow.jl requires Julia 1.9 or later. Install it from Julia's General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+Pkg.add("EnergyFlow")
 ```
 
 For multithreaded pairwise computations, start Julia with multiple threads:
