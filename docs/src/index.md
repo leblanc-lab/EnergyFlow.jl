@@ -38,12 +38,11 @@ unit-cost fictitious particle to balance the transport problem.
 
 ## Installation
 
-Requires Julia 1.9 or later. Until EnergyFlow.jl is registered in Julia's
-General registry, install it directly from GitHub:
+Requires Julia 1.9 or later. Install EnergyFlow.jl from Julia's General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+Pkg.add("EnergyFlow")
 ```
 
 ## Quick Start

@@ -1,7 +1,8 @@
 # EnergyFlow.jl
 
 [![CI](https://github.com/leblanc-lab/EnergyFlow.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/leblanc-lab/EnergyFlow.jl/actions/workflows/ci.yml)
-[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/dev/)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 EnergyFlow.jl computes the **Energy Mover's Distance (EMD)** between collider
@@ -10,12 +11,11 @@ ground metrics, pairwise computations, and event-isotropy utilities in Julia.
 
 ## Installation
 
-EnergyFlow.jl requires Julia 1.9 or later. Until the package is registered in
-Julia's General registry, install it directly from GitHub:
+EnergyFlow.jl requires Julia 1.9 or later. Install it from Julia's General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+Pkg.add("EnergyFlow")
 ```
 
 ## Quick start
@@ -46,7 +46,7 @@ D = emds([event1], [event2]; norm=true, metric=EtaPhiMetric())
 dists = emds([event1, event2]; norm=true, metric=EtaPhiMetric())
 ```
 
-Use [`load_hepmc3_events`](https://leblanc-lab.github.io/EnergyFlow.jl/dev/api/#EnergyFlow.load_hepmc3_events)
+Use [`load_hepmc3_events`](https://leblanc-lab.github.io/EnergyFlow.jl/stable/api/#EnergyFlow.load_hepmc3_events)
 to read HepMC3 ASCII files as `[pT, eta, phi]` event matrices.
 
 ## Solvers and metrics
@@ -76,7 +76,7 @@ workspace = EMDWorkspace(3, 2;
 distance = emd!(workspace, event1, event2)
 ```
 
-See the [documentation](https://leblanc-lab.github.io/EnergyFlow.jl/dev/) for
+See the [documentation](https://leblanc-lab.github.io/EnergyFlow.jl/stable/) for
 parameter definitions, Sinkhorn controls, transport plans, event isotropy, and
 the complete API.
 
@@ -98,6 +98,6 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 If you use EnergyFlow.jl in research, cite the software using
 [`CITATION.cff`](CITATION.cff) and cite the original EMD paper listed in the
-[documentation](https://leblanc-lab.github.io/EnergyFlow.jl/dev/).
+[documentation](https://leblanc-lab.github.io/EnergyFlow.jl/stable/).
 
-EnergyFlow.jl is released under the [MIT License](LICENSE).
+EnergyFlow.jl is released under the [MIT License](LICENSE). See the [third-party notices](THIRD_PARTY_NOTICE.md) for adapted code and sample-data attribution.
