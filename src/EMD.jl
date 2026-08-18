@@ -182,9 +182,12 @@ pre-allocated workspace.
 
 # Returns
 The EMD value by default. If `return_flow=true`, returns `(emd_value,
-transport_plan)`. For `norm=false`, the returned plan includes any fictitious
+transport_plan)`. When `norm=true`, the transport plan is normalized so its
+row/column sums are 1 and the marginals sum to 1. When `norm=false`, the
+internal solve is performed on a scaled balanced problem, and the returned plan
+is rescaled back to the original physical weights, including any fictitious
 source/target row or column introduced by the solver so its marginals match
-the balanced problem that was actually solved.
+those original weights.
 
 # Example
 ```julia
