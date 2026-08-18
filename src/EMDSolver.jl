@@ -271,7 +271,7 @@ function _emd_raw!(ws::EMDWorkspace{V},
         emd_val *= scale
     end
 
-    if status !== :optimal && (!isfinite(emd_val) || max_iter <= 0)
+    if status !== :optimal
         return V(NaN), status
     end
 
