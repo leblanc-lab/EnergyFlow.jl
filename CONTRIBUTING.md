@@ -1,14 +1,16 @@
 # Contributing to EnergyFlow.jl
 
-This document describes the best ways for reporting issues, proposing changes, and contributing via pull requests.
+This document describes how to report issues, propose changes, and contribute
+pull requests.
 
-By contributing to this project either with code or discussion, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+By contributing code or participating in project discussions, you agree to
+abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting bugs
 
 Open an [issue](https://github.com/leblanc-lab/EnergyFlow.jl/issues) and include:
 
-- A minimal reproducible example (ideally using `EnergyFlow` alone, without other packages)
+- A minimal reproducible example (ideally using `EnergyFlow` alone)
 - The output of `julia --project -e 'using Pkg; Pkg.status()'`
 - What you expected to happen vs. what actually happened
 
@@ -26,20 +28,25 @@ cd EnergyFlow.jl
 julia --project -e 'using Pkg; Pkg.instantiate()'
 ```
 
-
 ### Running tests
 
 ```bash
 julia --project -e 'using Pkg; Pkg.test()'
 ```
 
-The CI runs on Julia LTS, stable (`1`), and pre-release on Linux, plus
-a thread-safety check (single-threaded precompile, multi-threaded run).
+CI runs on Julia LTS, stable (`1`), and pre-release on Linux, plus a
+thread-safety check that precompiles with one thread and runs with multiple
+threads. The LTS and pre-release jobs are currently allowed to fail; the
+stable Julia job is required.
 
 A macOS job runs on PRs labeled `macos`, but not by default.
 
-It should go without saying, but if your change affects solver internals or anything `@threads`-parallel, please check that it doesn't break under multithreaded execution.
+If your change affects solver internals or parallel code, also run the tests
+with multiple threads:
 
+```bash
+julia --project=. -t 4 -e 'using Pkg; Pkg.test()'
+```
 
 ### Building the docs
 
@@ -59,8 +66,8 @@ Generated files are written to `docs/build/`.
 4. Make sure `Pkg.test()` passes locally.
 5. Open a PR against `main` with a description of what changed and why.
 
-Small, focused PRs are much easier to review than large ones. If your change
-is straightforward to split into independent pieces, please consider opening separate PRs.
+Small, focused PRs are easier to review. If your change splits naturally into
+independent pieces, consider opening separate pull requests.
 
 ## Code style
 
@@ -68,8 +75,7 @@ Follow the conventions already used in the surrounding file (naming,
 docstrings, argument order). There's no enforced formatter yet, so match the
 local style rather than reformatting unrelated code.
 
-A formatter will be added in the future, and we will adopt it for all new code afterwards.
-
 ## Questions
 
-If something is unclear, open an issue or reach out to @mattleblanc directly.
+If something is unclear, open a
+[GitHub issue](https://github.com/leblanc-lab/EnergyFlow.jl/issues).

@@ -6,7 +6,7 @@ collider events, with multiple solver backends and ground metrics.
 
 The EMD ([Komiske, Metodiev, Thaler, 2019](https://arxiv.org/abs/1902.02346))
 is an optimal-transport distance between events viewed as energy distributions
-over a metric space:
+over a metric space. Its balanced transport term is
 
 ```math
 \\mathrm{EMD}_{\\beta,R}(\\mathcal{E}_0, \\mathcal{E}_1)
@@ -14,7 +14,8 @@ over a metric space:
 ```
 
 subject to transport constraints, where ``d_{ij}`` is the ground distance
-between particles ``i`` and ``j``.
+between particles ``i`` and ``j``. When `norm=false` and total event weights
+differ, a unit-cost fictitious particle balances the transport problem.
 
 # Main entry points
 - [`emd`](@ref) / [`emd!`](@ref): single-pair EMD (allocating / workspace-reusing)

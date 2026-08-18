@@ -2,11 +2,12 @@
 
 ## Installation
 
-Requires Julia ≥ 1.9.
+EnergyFlow.jl requires Julia 1.9 or later. Until it is registered in Julia's
+General registry, install it directly from GitHub:
 
 ```julia
 using Pkg
-Pkg.add("EnergyFlow")
+Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
 ```
 
 For multithreaded pairwise computations, start Julia with multiple threads:
@@ -39,12 +40,12 @@ columns you want ignored.
 
 [`load_hepmc3_events`](@ref) reads a HepMC3 ASCII file and returns a vector of
 event matrices in `[pT, η, φ]` format, keeping only final-state particles
-(status code 1 by default):
+(status code 1 by default). Supply the path to your own file:
 
 ```julia
 using EnergyFlow
 
-events = load_hepmc3_events("data/sk_example_PU.hepmc"; maxevents=20)
+events = load_hepmc3_events("/path/to/events.hepmc"; maxevents=20)
 ```
 
 Useful keywords: `maxevents` (limit the number of events read), `skipevents`
@@ -54,12 +55,13 @@ keep), and `min_pt` (drop soft particles).
 ## Computing a single EMD
 
 ```julia
-val = emd(events[1], events[2]; R=1.0, beta=1.0, norm=true)
+val = emd(events[1], events[2];
+          R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 ```
 
 ### The parameters `R`, `beta`, and `norm`
 
-The EMD between events ``\mathcal{E}_0`` and ``\mathcal{E}_1`` is
+For events with equal total weight, the transport term is
 
 ```math
 \mathrm{EMD}_{\beta,R}(\mathcal{E}_0, \mathcal{E}_1)
@@ -81,6 +83,10 @@ The EMD between events ``\mathcal{E}_0`` and ``\mathcal{E}_1`` is
   `false` (the default), the difference in total weight is created/destroyed
   at unit cost, matching the Python EnergyFlow convention.
 
+For `[pT, y, φ]` or `[pT, η, φ]` events, use [`EtaPhiMetric`](@ref) to wrap
+the periodic azimuthal coordinate. The default [`EuclideanMetric`](@ref)
+treats every coordinate as an ordinary real number `(x,y,z)`.
+
 ## Pairwise EMDs
 
 [`emds`](@ref) computes many EMDs in one multithreaded call.
@@ -88,7 +94,8 @@ The EMD between events ``\mathcal{E}_0`` and ``\mathcal{E}_1`` is
 **Cross-pairwise** — two event lists give a distance matrix:
 
 ```julia
-D = emds(events[1:10], events[11:20]; R=1.0, beta=1.0, norm=true)
+D = emds(events[1:10], events[11:20];
+         R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 # D[i, j] = emd(events[i], events[10 + j])
 ```
 
@@ -97,7 +104,8 @@ distance matrix as a flat vector of length `n*(n-1)/2`, in SciPy `pdist`
 order (`(1,2), (1,3), …, (1,n), (2,3), …`):
 
 ```julia
-dists = emds(events[1:10]; R=1.0, beta=1.0, norm=true)
+dists = emds(events[1:10];
+             R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 ```
 
 To rebuild the full symmetric matrix from the flat vector:
@@ -114,13 +122,14 @@ end
 
 ## Reusing workspaces
 
-Each plain `emd` call allocates internal buffers. For tight loops, allocate an
-[`EMDWorkspace`](@ref) once — sized for the largest events you will compare —
-and use [`emd!`](@ref):
+Each plain `emd` call allocates a fresh solver workspace. For tight loops,
+construct an [`EMDWorkspace`](@ref) once — sized for the largest events you
+will compare — and use [`emd!`](@ref) to reuse the large solver buffers:
 
 ```julia
 n = maximum(size(e, 1) for e in events)   # largest particle count
-ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
+ws = EMDWorkspace(n, n;
+                  beta=1.0, R=1.0, norm=true, metric=EtaPhiMetric())
 
 val = emd!(ws, events[1], events[2])
 ```
@@ -128,14 +137,35 @@ val = emd!(ws, events[1], events[2])
 Note that with the in-place API the EMD parameters (`beta`, `R`, `norm`,
 `metric`) live in the workspace, not in the call.
 
-For pairwise computations, [`emds!`](@ref) writes into a pre-allocated result
-vector (workspaces are managed internally, one per thread):
+The public `emd!` path still allocates temporary weight and coordinate arrays
+while unpacking each event; it is allocation-reduced, not allocation-free.
+
+For self-pairwise computations, [`emds!`](@ref) writes into a preallocated
+result vector. Internal workspaces are still created once per worker task for
+each call:
 
 ```julia
 n = length(events)
 results = Vector{Float64}(undef, n * (n - 1) ÷ 2)
-emds!(results, events; R=1.0, beta=1.0, norm=true)
+emds!(results, events;
+      R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 ```
+
+## Transport plans and convergence
+
+Pass `return_flow=true` to [`emd`](@ref) to receive both the distance and the
+transport plan:
+
+```julia
+distance, plan = emd(events[1], events[2];
+                     norm=true, metric=EtaPhiMetric(), return_flow=true)
+```
+
+Exact backends return `NaN` and warn if the network-simplex iteration limit is
+reached. Set `strict=true` to turn any non-optimal solver status into an error.
+The Sinkhorn backend is approximate and may return its finite last iterate
+without converging; use `strict=true`, or inspect `workspace.converged` after
+calling `emd!` with a [`SinkhornWorkspace`](@ref), when convergence is required.
 
 ## Multithreading
 

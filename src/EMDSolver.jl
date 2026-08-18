@@ -24,7 +24,9 @@
 
 Pre-allocated workspace for repeated EMD computations with the
 network-simplex backends. Construct once, then pass to [`emd!`](@ref) (or the
-backend-specific `emd_ns64!` etc.) to avoid per-call allocations.
+backend-specific `emd_ns64!` etc.) to reuse the solver's internal buffers and
+reduce per-call allocations. The public event-matrix APIs still allocate
+temporary arrays while unpacking their inputs.
 
 The EMD parameters (`beta`, `R`, `norm`, `metric`) are stored in the
 workspace and used by every solve.
@@ -370,7 +372,8 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd_ns64!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000) -> Float64
+    emd_ns64!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000,
+              metric=ws.metric, strict=false) -> Float64
 
 Compute EMD using the Network Simplex Float64 backend with a pre-allocated
 `EMDWorkspace`. The workspace's `beta`, `R`, `norm` settings are used.
@@ -380,7 +383,9 @@ Compute EMD using the Network Simplex Float64 backend with a pre-allocated
 - `ev0`, `ev1`: EnergyFlow-format event matrices (M×(1+gdim)).
   Column 1 = particle weights (pT); columns 2:(1+gdim) = coordinates.
 - `gdim`: coordinate dimensions to use (`nothing` = all).
-- `n_iter_max`: max network-simplex iterations.
+- `n_iter_max`: maximum network-simplex iterations.
+- `metric`: ground metric for this call (default: the workspace metric).
+- `strict`: raise an error rather than warn if the solver does not converge.
 
 # Returns
 - `Float64` EMD value.
@@ -397,7 +402,8 @@ end
 
 """
     emd_ns64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
-             n_iter_max=100_000, metric=EuclideanMetric()) -> Float64
+             n_iter_max=100_000, metric=EuclideanMetric(),
+             return_flow=false, strict=false) -> Float64
 
 Compute EMD using the Network Simplex Float64 backend.
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ns64!`.
@@ -413,9 +419,11 @@ Equivalent to [`emd`](@ref) with `backend=:ns64`.
 - `gdim`: number of coordinate dimensions to use. `nothing` = use all remaining columns.
 - `n_iter_max`: max network-simplex iterations (default 100_000).
 - `metric`: ground distance metric (default [`EuclideanMetric()`](@ref EuclideanMetric)).
+- `return_flow`: also return the transport plan when `true`.
+- `strict`: raise an error rather than warn if the solver does not converge.
 
 # Returns
-- `Float64` EMD value.
+- A `Float64` EMD value, or `(value, plan)` when `return_flow=true`.
 """
 function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   R::Real        = 1.0,
@@ -436,7 +444,8 @@ end
 # ─────────────────────────────────────────────────────────────────────
 
 """
-    emd_ot64!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000) -> Float64
+    emd_ot64!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000,
+              metric=ws.metric, strict=false) -> Float64
 
 Compute EMD using the OT-style Float64 backend (arc mixing enabled).
 Uses the same NetworkSimplex solver but with POT-style arc interleaving
@@ -454,7 +463,8 @@ end
 
 """
     emd_ot64(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
-             n_iter_max=100_000, metric=EuclideanMetric()) -> Float64
+             n_iter_max=100_000, metric=EuclideanMetric(),
+             return_flow=false, strict=false) -> Float64
 
 Compute EMD using the OT-style Float64 backend (arc mixing enabled).
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ot64!`.
@@ -481,7 +491,8 @@ end
 # ─── emd_ns32! / emd_ns32 — single-pair NS Float32 backend ─────────
 
 """
-    emd_ns32!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000) -> Float32
+    emd_ns32!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000,
+              metric=ws.metric, strict=false) -> Float32
 
 Compute EMD using the Network Simplex Float32 backend with a pre-allocated
 `EMDWorkspace{Float32}`.
@@ -498,7 +509,8 @@ end
 
 """
     emd_ns32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
-             n_iter_max=100_000, metric=EuclideanMetric()) -> Float32
+             n_iter_max=100_000, metric=EuclideanMetric(),
+             return_flow=false, strict=false) -> Float32
 
 Compute EMD using the Network Simplex Float32 backend.
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ns32!`.
@@ -521,7 +533,8 @@ end
 # ─── emd_ot32! / emd_ot32 — OT-style (arc mixing) Float32 backend ──
 
 """
-    emd_ot32!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000) -> Float32
+    emd_ot32!(ws, ev0, ev1; gdim=nothing, n_iter_max=100_000,
+              metric=ws.metric, strict=false) -> Float32
 
 Compute EMD using the OT-style Float32 backend (arc mixing enabled).
 """
@@ -537,7 +550,8 @@ end
 
 """
     emd_ot32(ev0, ev1; R=1.0, beta=1.0, norm=false, gdim=nothing,
-             n_iter_max=100_000, metric=EuclideanMetric()) -> Float32
+             n_iter_max=100_000, metric=EuclideanMetric(),
+             return_flow=false, strict=false) -> Float32
 
 Compute EMD using the OT-style Float32 backend (arc mixing enabled).
 Allocates a fresh workspace each call. For repeated calls, prefer `emd_ot32!`.

@@ -1,99 +1,103 @@
 # EnergyFlow.jl
 
-[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/stable)
-<!-- [![Build Status](https://github.com/leblanc-lab/EnergyFlow.jl/workflows/CI/badge.svg)](https://github.com/leblanc-lab/EnergyFlow.jl/actions) -->
-[![Coverage](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/leblanc-lab/EnergyFlow.jl)
+[![CI](https://github.com/leblanc-lab/EnergyFlow.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/leblanc-lab/EnergyFlow.jl/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A Julia package for computing the **Energy Mover's Distance (EMD)** between collider events, with multiple solver backends and ground metrics, as a flexible alternative to the Python [EnergyFlow](https://energyflow.network/) package.
+EnergyFlow.jl computes the **Energy Mover's Distance (EMD)** between collider
+events. It provides exact and approximate optimal-transport solvers, several
+ground metrics, pairwise computations, and event-isotropy utilities in Julia.
+
+## Installation
+
+EnergyFlow.jl requires Julia 1.9 or later. Until the package is registered in
+Julia's General registry, install it directly from GitHub:
+
+```julia
+using Pkg
+Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
+```
 
 ## Quick start
 
-Requires Julia ≥ 1.9.
+An event is a matrix with one particle per row. The first column contains the
+particle weight (usually transverse momentum or energy); the remaining columns
+contain its coordinates.
+
 ```julia
 using EnergyFlow
 
-# Load events from a HepMC3 file
-events = load_hepmc3_events("data/sk_example_PU.hepmc"; maxevents=20) # read first 20 events
+# Two events in [pT, y, phi] format
+event1 = [1.0  0.5  0.1;
+          0.8 -0.3  0.4;
+          0.6  0.1 -0.2]
 
-# or simply create with arrays of (pT, y, phi for each particle)
-# event1 = [1.0 0.5 0.1;    # particle 1
-#           0.8 -0.3 0.4;   # particle 2  
-#           0.6 0.1 -0.2]   # particle 3
+event2 = [0.9  0.4  0.0;
+          0.7 -0.2  0.3]
 
-# event2 = [0.9 0.4 0.0;    # particle 1
-#           0.7 -0.2 0.3]   # particle 2
+# Single-pair EMD. EtaPhiMetric wraps the azimuthal coordinate.
+distance = emd(event1, event2;
+               R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 
-# Single-pair EMD (default: :ns64, Euclidean)
-val = emd(events[1], events[2]; R=1.0, beta=1.0, norm=true)
+# Cross-pairwise: a length(events_a) x length(events_b) matrix
+D = emds([event1], [event2]; norm=true, metric=EtaPhiMetric())
 
-# Cross-pairwise: returns a 10×10 matrix
-D = emds(events[1:10], events[11:20]; R=1.0, beta=1.0, norm=true)
-
-# Self-pairwise: flat upper-triangular vector of length n*(n-1)/2
-dists = emds(events[1:10]; R=1.0, beta=1.0, norm=true)
+# Self-pairwise: the strict upper triangle in SciPy pdist order
+dists = emds([event1, event2]; norm=true, metric=EtaPhiMetric())
 ```
 
+Use [`load_hepmc3_events`](https://leblanc-lab.github.io/EnergyFlow.jl/dev/api/#EnergyFlow.load_hepmc3_events)
+to read HepMC3 ASCII files as `[pT, eta, phi]` event matrices.
 
-## Features
+## Solvers and metrics
 
-- Fast exact solvers: Network Simplex (`:ns64`, `:ns32`) and arc mixing Network Simplex(`:ot64`, `:ot32`)
-- Approximate entropic solver: Sinkhorn (`:sinkhorn`)
-- Multiple ground metrics: Euclidean, squared Euclidean, (η, φ), precomputed, or custom
-- Single-pair and pairwise (self / cross) EMD/EMDs
-- In-place APIs with reusable workspaces for tight loops
-- HepMC3 event loading via `LorentzVectorHEP`
+The default backend is the exact `Float64` network-simplex solver, `:ns64`.
 
-### Backends and metrics
+| Backend | Description |
+|:--|:--|
+| `:ns64` | Network simplex, `Float64` (default, exact) |
+| `:ot64` | Network simplex with arc mixing, `Float64` (exact) |
+| `:ns32` | Network simplex, `Float32` (exact) |
+| `:ot32` | Network simplex with arc mixing, `Float32` (exact) |
+| `:sinkhorn` | Entropy-regularized optimal transport, `Float64` (approximate) |
+
+Choose a backend per call with `backend=:ot64`, or change the process-wide
+default with `set_backend(:ot64)`. Available ground metrics are
+`EuclideanMetric()`, `SquaredEuclideanMetric()`, `EtaPhiMetric()`,
+`PrecomputedMetric(costs)`, and `CustomMetric(f)`.
+
+For repeated single-pair computations, `EMDWorkspace` and `emd!` reuse the
+solver's large internal buffers and reduce allocations:
 
 ```julia
-# Switch backend per call…
-emd(e1, e2; backend=:ot64, metric=EtaPhiMetric())
-
-# …or globally
-set_backend(:ns32)
+workspace = EMDWorkspace(3, 2;
+                         R=1.0, beta=1.0, norm=true,
+                         metric=EtaPhiMetric())
+distance = emd!(workspace, event1, event2)
 ```
 
-| Backend     | Description                                |
-|-------------|--------------------------------------------|
-| `:ns64`     | Network Simplex, Float64 *(default, exact)*|
-| `:ot64`     | OT-style arc mixing, Float64 *(exact)*     |
-| `:ns32`     | Network Simplex, Float32                   |
-| `:ot32`     | OT-style arc mixing, Float32               |
-| `:sinkhorn` | Entropic OT *(approximate, fast)*          |
+See the [documentation](https://leblanc-lab.github.io/EnergyFlow.jl/dev/) for
+parameter definitions, Sinkhorn controls, transport plans, event isotropy, and
+the complete API.
 
-Available metrics: `EuclideanMetric`, `SquaredEuclideanMetric`, `EtaPhiMetric`, `PrecomputedMetric(matrix)`, `CustomMetric(f)`.
+## Development
 
-### Reusable workspace
+- [`example/emd/`](example/emd/) contains a runnable EMD example and notebook.
+- [`example/isotropy/`](example/isotropy/) demonstrates ring, cylinder, and
+  spherical event isotropy.
+- [`benchmark/`](benchmark/) contains reproducible Julia/POT comparisons.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) explains the development workflow.
 
-```julia
-n = maximum(size(e, 1) for e in events)   # largest particle count
-ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
-val = emd!(ws, events[1], events[2])
-```
-
-## Layout
-
-- [src/](src/) — package source
-- [example/emd/](example/emd/) — runnable EMD example ([.jl](example/emd/example_emd.jl), [.ipynb](example/emd/example_emd.ipynb), [walkthrough](example/emd/example_emd.md))
-- [example/isotropy/](example/isotropy/) — event isotropy event shape, ring/cylinder (hadron) and sphere (lepton collider) built on the package API ([.jl](example/isotropy/example_isotropy.jl), [walkthrough](example/isotropy/example_isotropy.md))
-- [test/](test/) — unit tests
-- [benchmark/](benchmark/) — performance benchmarks
-- [data/](data/) — sample HepMC3 events
-- [paper/](paper/) — for submission to JOSS
-
-## Tests
+Run the test suite with:
 
 ```bash
-julia --project -e 'using Pkg; Pkg.test()'
+julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-## Documentation
+## Citation and license
 
-Build docs locally:
+If you use EnergyFlow.jl in research, cite the software using
+[`CITATION.cff`](CITATION.cff) and cite the original EMD paper listed in the
+[documentation](https://leblanc-lab.github.io/EnergyFlow.jl/dev/).
 
-```bash
-julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
-julia --project=docs docs/make.jl
-```
-
-Generated files are written to `docs/build/`.
+EnergyFlow.jl is released under the [MIT License](LICENSE).

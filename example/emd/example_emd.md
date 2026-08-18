@@ -6,6 +6,7 @@ Files in this folder:
 - [example_emd.ipynb](example_emd.ipynb) — Jupyter notebook version
 
 Run the script:
+
 ```bash
 cd example/emd
 julia --project=. example_emd.jl
@@ -14,7 +15,9 @@ Or open the notebook in Jupyter.
 
 ## 1. Load events
 
-Events are read from a HepMC3 file. Each event becomes an `M × (1+gdim)` matrix where column 1 holds the energy/pT weight and the remaining columns hold the coordinates.
+Events are read from a HepMC3 file. Each event becomes an `M × (1 + gdim)`
+matrix in which column 1 holds the energy or `pT` weight and the remaining
+columns hold the coordinates.
 
 ```julia
 events = load_hepmc3_events(
@@ -86,11 +89,15 @@ D = emds(events[1:10], events[11:20]; R=1.0, beta=1.0, norm=true)
 dists = emds(events[1:10]; R=1.0, beta=1.0, norm=true)
 ```
 
-All single-pair keywords (`backend`, `metric`, `R`, `beta`, `norm`, …) work here too.
+Pairwise calls accept `backend`, `metric`, `R`, `beta`, `norm`, `gdim`,
+`n_iter_max`, and `strict`. Transport plans are available only from the
+single-pair API.
 
 ## 4. Reusing workspaces
 
-For repeated calls in a tight loop, allocate once and reuse with the in-place forms `emd!` / `emds!`. The workspace is sized for the largest events it will see, and holds the EMD parameters (`beta`, `R`, `norm`, `metric`):
+For repeated single-pair calls in a tight loop, reuse the solver buffers with
+`EMDWorkspace` and `emd!`. The workspace is sized for the largest events it
+will see and holds the EMD parameters (`beta`, `R`, `norm`, `metric`):
 
 ```julia
 n = maximum(size(e, 1) for e in events)   # largest particle count
@@ -98,7 +105,11 @@ ws = EMDWorkspace(n, n; beta=1.0, R=1.0, norm=true)
 val = emd!(ws, events[1], events[2])
 ```
 
-This avoids per-call allocations and is the fastest path for large jobs.
+This reduces allocations by reusing the large solver buffers. The public
+`emd!` path still allocates temporary arrays while unpacking each event.
+
+For self-pairwise computations, `emds!` can reuse a caller-provided output
+vector, but it manages its worker workspaces internally.
 
 ## 5. Transport plan visualisation
 
@@ -111,5 +122,5 @@ particles, and lines whose thickness follows the transported weight.
 val, plan = emd(events[1], events[2]; R=1.0, beta=1.0, norm=true, return_flow=true)
 ```
 
-The runnable script in this folder now saves a simple visualisation as
+The runnable script in this folder saves a simple visualisation as
 `emd_transport_plan.png` using `Plots.jl`.

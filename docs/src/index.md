@@ -10,7 +10,7 @@ flexible choice of ground metrics. It is a Julia alternative to the Python
 The EMD ([Komiske, Metodiev, Thaler, 2019](https://arxiv.org/abs/1902.02346))
 views each event as a distribution of energy over a metric space and measures
 the minimum "work" — energy times distance — needed to rearrange one event
-into the other:
+into the other. Its balanced transport term is
 
 ```math
 \mathrm{EMD}_{\beta,R}(\mathcal{E}_0, \mathcal{E}_1)
@@ -19,6 +19,8 @@ into the other:
 
 subject to transport constraints, where ``f_{ij}`` is the energy transported
 from particle ``i`` to particle ``j`` and ``d_{ij}`` is their ground distance.
+For unnormalized events with unequal total weight, EnergyFlow.jl adds a
+unit-cost fictitious particle to balance the transport problem.
 
 ## Highlights
 
@@ -30,17 +32,18 @@ from particle ``i`` to particle ``j`` and ``d_{ij}`` is their ground distance.
   [`PrecomputedMetric`](@ref), [`CustomMetric`](@ref)
 - **Single-pair and pairwise APIs** ([`emd`](@ref), [`emds`](@ref)), with
   multithreaded pairwise computation
-- **In-place variants** ([`emd!`](@ref), [`emds!`](@ref)) with reusable
-  workspaces for allocation-free hot loops
+- **Allocation-reduced APIs**: reusable workspaces for [`emd!`](@ref) and
+  preallocated result storage for [`emds!`](@ref)
 - **HepMC3 event loading** with [`load_hepmc3_events`](@ref)
 
 ## Installation
 
-Requires Julia ≥ 1.9.
+Requires Julia 1.9 or later. Until EnergyFlow.jl is registered in Julia's
+General registry, install it directly from GitHub:
 
 ```julia
 using Pkg
-Pkg.add("EnergyFlow")
+Pkg.add(url="https://github.com/leblanc-lab/EnergyFlow.jl")
 ```
 
 ## Quick Start
@@ -56,17 +59,15 @@ ev0 = [1.0  0.5  0.1;
 ev1 = [0.9  0.4  0.0;
        0.7 -0.2  0.3]
 
-# Single-pair EMD
-val = emd(ev0, ev1; R=1.0, beta=1.0, norm=true)
+# Single-pair EMD. EtaPhiMetric wraps the azimuthal coordinate.
+val = emd(ev0, ev1;
+          R=1.0, beta=1.0, norm=true, metric=EtaPhiMetric())
 
-# Or load events from a HepMC3 file
-events = load_hepmc3_events("data/sk_example_PU.hepmc"; maxevents=20)
-
-# Cross-pairwise: 10×10 matrix
-D = emds(events[1:10], events[11:20]; R=1.0, beta=1.0, norm=true)
+# Cross-pairwise: a 1×1 matrix
+D = emds([ev0], [ev1]; norm=true, metric=EtaPhiMetric())
 
 # Self-pairwise: flat upper-triangular vector of length n*(n-1)/2
-dists = emds(events[1:10]; R=1.0, beta=1.0, norm=true)
+dists = emds([ev0, ev1]; norm=true, metric=EtaPhiMetric())
 ```
 
 ## Where to go next
@@ -87,4 +88,6 @@ The EMD was introduced in:
 > [Phys. Rev. Lett. 123, 041801 (2019)](https://doi.org/10.1103/PhysRevLett.123.041801),
 > [arXiv:1902.02346](https://arxiv.org/abs/1902.02346).
 
-See the repository's `CITATION.cff` for how to cite this package.
+See the repository's
+[`CITATION.cff`](https://github.com/leblanc-lab/EnergyFlow.jl/blob/main/CITATION.cff)
+for how to cite this package.
