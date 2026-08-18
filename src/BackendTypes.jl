@@ -48,3 +48,8 @@ _backend_symbol(::typeof(OT64)) = :ot64
 _backend_symbol(::typeof(NS32)) = :ns32
 _backend_symbol(::typeof(OT32)) = :ot32
 _backend_symbol(::SinkhornBackend) = :sinkhorn
+
+# Generic fallback
+_backend_symbol(b::NetworkSimplexBackend) = throw(ArgumentError(
+    "unsupported network-simplex backend $b; supported backends: $(AVAILABLE_BACKENDS)"
+))

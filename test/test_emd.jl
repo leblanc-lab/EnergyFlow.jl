@@ -127,6 +127,11 @@ test_log("="^70)
                 SinkhornWorkspace(2, 2), ev0, ev1;
                 backend=EnergyFlow.NS64,
             )
+
+            let bad = EnergyFlow.NetworkSimplexBackend{Float16,false}()
+                @test_throws ArgumentError EnergyFlow._backend_symbol(bad)
+                @test_throws ArgumentError emds(events; backend=bad)
+            end
         end
 
         metric = CustomMetric((a, b) -> 2 * sqrt(sum((a .- b) .^ 2)))
