@@ -58,6 +58,9 @@ mutable struct SinkhornWorkspace{V<:AbstractFloat}
     tol::V               # convergence tolerance
     annealing::Bool      # whether to use ε-annealing
 
+    # Last solve diagnostic: scale applied to the normalized internal solve
+    last_scale::V
+
     # Pre-allocated arrays
     max_n0::Int
     max_n1::Int
@@ -85,6 +88,7 @@ function SinkhornWorkspace{V}(max_n0::Int, max_n1::Int;
     SinkhornWorkspace{V}(
         V(beta), V(R), norm,
         V(epsilon), max_iter, V(tol), annealing,
+        one(V),
         max_n0, max_n1,
         Matrix{V}(undef, max_n0 + 1, max_n1 + 1),
         Matrix{V}(undef, max_n0 + 1, max_n1 + 1),
@@ -422,6 +426,7 @@ function _emd_sinkhorn_raw!(ws::SinkhornWorkspace{V},
         emd_val, status = _sinkhorn_log_domain!(ws, n0_eff, n1_eff, ws.epsilon)
     end
 
+    ws.last_scale = scale
     if !ws.norm
         emd_val *= scale
     end
@@ -466,9 +471,16 @@ function emd_sinkhorn!(ws::SinkhornWorkspace{V},
     w1, c1 = _unpack_event(V, ev1, gdim)
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
-    val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn!", value=val)
-    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
+    val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+    _handle_solver_status(_status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn!", value=val)
+    if !return_flow
+        return val
+    end
+    plan = _sinkhorn_transport_plan(ws, n0_eff, n1_eff)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end
 
 """
@@ -519,9 +531,16 @@ function emd_sinkhorn(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                                tol=sinkhorn_tol, annealing=annealing)
 
     n0_eff, n1_eff = _sinkhorn_plan_dims(ws, w0, w1)
-    val, status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
-    _handle_solver_status(status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn", value=val)
-    return return_flow ? (val, _sinkhorn_transport_plan(ws, n0_eff, n1_eff)) : val
+    val, _status = _emd_sinkhorn_raw!(ws, w0, c0, w1, c1)
+    _handle_solver_status(_status; strict=strict, backend=:sinkhorn, context="emd_sinkhorn", value=val)
+    if !return_flow
+        return val
+    end
+    plan = _sinkhorn_transport_plan(ws, n0_eff, n1_eff)
+    if !ws.norm
+        plan .*= ws.last_scale
+    end
+    return val, plan
 end
 
 # ─────────────────────────────────────────────────────────────────────
