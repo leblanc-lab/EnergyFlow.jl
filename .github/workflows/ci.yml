@@ -26,11 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        julia-version: ["lts", "1", "pre"]
+        julia-version: ["1.9", "lts", "1", "pre"]
         include:
           - julia-version: "pre"
-            allow-failure: true
-          - julia-version: "lts"
             allow-failure: true
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix['allow-failure'] || false }}
