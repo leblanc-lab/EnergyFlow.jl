@@ -20,14 +20,21 @@ Per call:
 
 ```julia
 val = emd(ev0, ev1; backend=:ot64)
+val = emd(ev0, ev1; backend=EnergyFlow.OT64)  # typed equivalent
 ```
 
 Or globally, for all subsequent calls that don't specify one:
 
 ```julia
 set_backend(:ot64)
+set_backend(EnergyFlow.OT64)  # typed equivalent
 get_backend()   # :ot64
 ```
+
+The symbols are retained as a compatibility interface. Internally they are
+converted once to the singleton strategies `EnergyFlow.NS64`,
+`EnergyFlow.OT64`, `EnergyFlow.NS32`, `EnergyFlow.OT32`, and
+`EnergyFlow.Sinkhorn`, after which Julia dispatch selects the implementation.
 
 Each backend is also available as a directly callable function
 (`emd_ns64`, `emd_ot64`, `emd_ns32`, `emd_ot32`, `emd_sinkhorn`, and the

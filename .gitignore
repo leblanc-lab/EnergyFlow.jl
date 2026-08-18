@@ -10,4 +10,3 @@ __pycache__
 *.info
 results*.json*
 docs/build/
-test_output.txt

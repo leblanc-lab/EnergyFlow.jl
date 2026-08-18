@@ -539,5 +539,63 @@ end
     test_log("    verified all $(na * nb) cross-pairs against individual emd calls")
 end
 
-test_log("\nAll PairwiseEMD tests completed!")
+@testset "typed pairwise backend strategies" begin
+    events = [
+        reshape([1.0, 0.0], 1, 2),
+        reshape([1.0, 0.5], 1, 2),
+        reshape([1.0, 1.0], 1, 2),
+    ]
 
+    for (symbol, strategy, T) in (
+        (:ns64, EnergyFlow.NS64, Float64),
+        (:ot64, EnergyFlow.OT64, Float64),
+        (:ns32, EnergyFlow.NS32, Float32),
+        (:ot32, EnergyFlow.OT32, Float32),
+    )
+        symbolic_self = emds(events; backend=symbol, norm=true)
+        typed_self = emds(events; backend=strategy, norm=true)
+        @test typed_self ≈ symbolic_self
+        @test eltype(typed_self) === T
+
+        symbolic_cross = emds(events[1:2], events[2:3]; backend=symbol, norm=true)
+        typed_cross = emds(events[1:2], events[2:3]; backend=strategy, norm=true)
+        @test typed_cross ≈ symbolic_cross
+        @test eltype(typed_cross) === T
+
+        results = similar(typed_self)
+        @test emds!(results, events; backend=strategy, norm=true) === results
+        @test results ≈ typed_self
+    end
+
+    symbolic_sinkhorn = emds(events; backend=:sinkhorn, norm=true)
+    typed_sinkhorn = emds(events; backend=EnergyFlow.Sinkhorn, norm=true)
+    @test typed_sinkhorn ≈ symbolic_sinkhorn
+    @test eltype(typed_sinkhorn) === Float64
+
+    symbolic_sinkhorn_cross = emds(
+        events[1:2], events[2:3];
+        backend=:sinkhorn,
+        norm=true,
+    )
+    typed_sinkhorn_cross = emds(
+        events[1:2], events[2:3];
+        backend=EnergyFlow.Sinkhorn,
+        norm=true,
+    )
+    @test typed_sinkhorn_cross ≈ symbolic_sinkhorn_cross
+
+    @test_throws ArgumentError emds!(
+        zeros(Float32, 3), events;
+        backend=EnergyFlow.NS64,
+    )
+    @test_throws ArgumentError emds!(
+        zeros(Float64, 3), events;
+        backend=EnergyFlow.NS32,
+    )
+    @test_throws ArgumentError emds!(
+        zeros(Float64, 3), events;
+        backend=EnergyFlow.Sinkhorn,
+    )
+end
+
+test_log("\nAll PairwiseEMD tests completed!")

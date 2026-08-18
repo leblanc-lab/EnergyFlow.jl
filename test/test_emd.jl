@@ -57,11 +57,82 @@ test_log("="^70)
         @test ns32_inplace isa Float32
         @test ot32_inplace isa Float32
 
-       # Backend-specific in-place frontends must remain type-stable.
+        # Backend-specific in-place frontends must remain type-stable.
         @test (@inferred emd_ns64!(ws64, ev0, ev1; strict=true)) ≈ ns64_inplace
         @test (@inferred emd_ot64!(ws64, ev0, ev1; strict=true)) ≈ ot64_inplace
         @test (@inferred emd_ns32!(ws32, ev0, ev1; strict=true)) ≈ ns32_inplace
         @test (@inferred emd_ot32!(ws32, ev0, ev1; strict=true)) ≈ ot32_inplace
+
+        @testset "typed backend strategies" begin
+            backend_cases = (
+                (:ns64, EnergyFlow.NS64, Float64),
+                (:ot64, EnergyFlow.OT64, Float64),
+                (:ns32, EnergyFlow.NS32, Float32),
+                (:ot32, EnergyFlow.OT32, Float32),
+                (:sinkhorn, EnergyFlow.Sinkhorn, Float64),
+            )
+
+            for (symbol, strategy, T) in backend_cases
+                symbolic = emd(ev0, ev1; backend=symbol, norm=true)
+                typed = emd(ev0, ev1; backend=strategy, norm=true)
+                @test typed ≈ symbolic
+                @test typed isa T
+
+                symbolic_value, symbolic_plan = emd(
+                    ev0_plan, ev1_plan;
+                    backend=symbol,
+                    norm=true,
+                    return_flow=true,
+                )
+                typed_value, typed_plan = emd(
+                    ev0_plan, ev1_plan;
+                    backend=strategy,
+                    norm=true,
+                    return_flow=true,
+                )
+                @test typed_value ≈ symbolic_value
+                @test typed_plan ≈ symbolic_plan
+                @test eltype(typed_plan) === T
+            end
+
+            for (strategy, T) in (
+                (EnergyFlow.NS64, Float64),
+                (EnergyFlow.OT64, Float64),
+                (EnergyFlow.NS32, Float32),
+                (EnergyFlow.OT32, Float32),
+            )
+                ws = EMDWorkspace{T}(2, 2; norm=true)
+                @test emd!(ws, ev0, ev1; backend=strategy) ≈ one(T)
+            end
+
+            typed_sinkhorn_ws = SinkhornWorkspace(2, 2; norm=true)
+            @test emd!(
+                typed_sinkhorn_ws, ev0, ev1;
+                backend=EnergyFlow.Sinkhorn,
+            ) ≈ 1.0
+
+            @test_throws ArgumentError emd!(
+                EMDWorkspace{Float32}(2, 2), ev0, ev1;
+                backend=EnergyFlow.NS64,
+            )
+            @test_throws ArgumentError emd!(
+                EMDWorkspace{Float64}(2, 2), ev0, ev1;
+                backend=EnergyFlow.NS32,
+            )
+            @test_throws ArgumentError emd!(
+                EMDWorkspace{Float64}(2, 2), ev0, ev1;
+                backend=EnergyFlow.Sinkhorn,
+            )
+            @test_throws ArgumentError emd!(
+                SinkhornWorkspace(2, 2), ev0, ev1;
+                backend=EnergyFlow.NS64,
+            )
+
+            let bad = EnergyFlow.NetworkSimplexBackend{Float16,false}()
+                @test_throws ArgumentError EnergyFlow._backend_symbol(bad)
+                @test_throws ArgumentError emds(events; backend=bad)
+            end
+        end
 
         metric = CustomMetric((a, b) -> 2 * sqrt(sum((a .- b) .^ 2)))
         metric_val = emd!(ws64, ev0, ev1; backend=:ns64, metric=metric)
@@ -125,7 +196,7 @@ test_log("="^70)
         test_log("  sinkhorn = $sink_val")
         @test isfinite(sink_val)
         @test sink_val ≥ 0.0
-        @test_throws ErrorException emd(ev0, ev1; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, metric=metric)
+        @test_throws ArgumentError emd(ev0, ev1; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, metric=metric)
 
         sink_val_flow, sink_plan = emd(ev0_plan, ev1_plan; backend=:sinkhorn, R=1.0, beta=1.0, norm=true, return_flow=true)
         @test sink_val_flow ≈ 0.5 atol=1e-10
@@ -152,7 +223,7 @@ test_log("="^70)
         sink_inplace = emd!(sink_ws, ev0_plan, ev1_plan)
         test_log("  sinkhorn emd! = $sink_inplace")
         @test sink_inplace isa Float64
-        @test_throws ErrorException emd!(sink_ws, ev0, ev1; metric=metric)
+        @test_throws ArgumentError emd!(sink_ws, ev0, ev1; metric=metric)
 
         sink_inplace_flow, sink_inplace_plan = emd!(sink_ws, ev0_plan, ev1_plan; return_flow=true)
         @test sink_inplace_flow ≈ sink_inplace atol=1e-10
@@ -178,11 +249,11 @@ test_log("="^70)
             @test size(emds([nonempty_ev, nonempty_ev], empty_events; backend=:ns64)) == (2, 0)
         end
 
-        @test_throws ErrorException emd(ev0, ev1; backend=:bogus)
-        @test_throws ErrorException emd!(ws64, ev0, ev1; backend=:bogus)
-        @test_throws ErrorException emds(events; backend=:bogus)
-        @test_throws ErrorException emds!(results64, events; backend=:sinkhorn)
-        @test_throws ErrorException emds!(results64, events; backend=:bogus)
+        @test_throws ArgumentError emd(ev0, ev1; backend=:bogus)
+        @test_throws ArgumentError emd!(ws64, ev0, ev1; backend=:bogus)
+        @test_throws ArgumentError emds(events; backend=:bogus)
+        @test_throws ArgumentError emds!(results64, events; backend=:sinkhorn)
+        @test_throws ArgumentError emds!(results64, events; backend=:bogus)
     finally
         set_backend(original_backend)
     end

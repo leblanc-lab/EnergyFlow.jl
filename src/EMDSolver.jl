@@ -286,41 +286,21 @@ function _emd_raw!(ws::EMDWorkspace{V},
     return emd_val, status
 end
 
-# Shared implementation for the workspace-reusing single-pair frontends.
-function _emd_backend!(::Type{U}, ws::EMDWorkspace{V},
-                       ev0::AbstractMatrix{<:Real},
-                       ev1::AbstractMatrix{<:Real};
-                       arc_mixing::Bool,
-                       backend::Symbol,
-                       context::AbstractString,
-                       gdim::Union{Nothing,Int} = nothing,
-                       n_iter_max::Int = 100_000,
-                       metric::GroundMetric = ws.metric,
-                       strict::Bool = false) where {U<:AbstractFloat,V}
 
-    w0, c0 = _unpack_event(U, ev0, gdim)
-    w1, c1 = _unpack_event(U, ev1, gdim)
+function _handle_backend_status(status::Symbol,
+                                backend::NetworkSimplexBackend;
+                                strict::Bool = false,
+                                inplace::Bool = false)
+    status === :optimal && return nothing
 
-    val, status = _emd_raw!(
-        ws,
-        convert(Vector{V}, w0), convert(Matrix{V}, c0),
-        convert(Vector{V}, w1), convert(Matrix{V}, c1);
-        max_iter=n_iter_max,
-        arc_mixing,
-        metric,
-    )
-
-    _handle_solver_status(status; strict, backend, context)
-    return val
+    symbol = _backend_symbol(backend)
+    context = inplace ? "emd_$(symbol)!" : "emd_$(symbol)"
+    _handle_solver_status(status; strict, backend=symbol, context)
 end
 
-# Shared implementation for the allocating single-pair frontends.
-function _emd_backend(::Type{V},
+function _emd_backend(backend::NetworkSimplexBackend{V},
                       ev0::AbstractMatrix{<:Real},
                       ev1::AbstractMatrix{<:Real};
-                      arc_mixing::Bool,
-                      backend::Symbol,
-                      context::AbstractString,
                       R::Real = 1.0,
                       beta::Real = 1.0,
                       norm::Bool = false,
@@ -328,7 +308,9 @@ function _emd_backend(::Type{V},
                       n_iter_max::Int = 100_000,
                       metric::GroundMetric = EuclideanMetric(),
                       return_flow::Bool = false,
-                      strict::Bool = false) where {V<:AbstractFloat}
+                      strict::Bool = false) where {V}
+
+    arc_mixing = _arc_mixing(backend)
 
     w0, c0 = _unpack_event(V, ev0, gdim)
     w1, c1 = _unpack_event(V, ev1, gdim)
@@ -347,7 +329,7 @@ function _emd_backend(::Type{V},
         arc_mixing,
     )
 
-    _handle_solver_status(status; strict, backend, context)
+    _handle_backend_status(status, backend; strict)
 
     return_flow || return val
     plan = _transport_plan(ws.ns; arc_mixing)
@@ -355,6 +337,32 @@ function _emd_backend(::Type{V},
         plan .*= ws.last_scale
     end
     return val, plan
+end
+
+function _emd_backend!(backend::NetworkSimplexBackend{V},
+                       ws::EMDWorkspace{V},
+                       ev0::AbstractMatrix{<:Real},
+                       ev1::AbstractMatrix{<:Real};
+                       gdim::Union{Nothing,Int} = nothing,
+                       n_iter_max::Int = 100_000,
+                       metric::GroundMetric = ws.metric,
+                       strict::Bool = false) where {V}
+
+    arc_mixing = _arc_mixing(backend)
+
+    w0, c0 = _unpack_event(V, ev0, gdim)
+    w1, c1 = _unpack_event(V, ev1, gdim)
+
+    val, status = _emd_raw!(
+        ws,
+        w0, c0, w1, c1;
+        max_iter=n_iter_max,
+        arc_mixing,
+        metric,
+    )
+
+    _handle_backend_status(status, backend; strict, inplace=true)
+    return val
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -377,15 +385,14 @@ Compute EMD using the Network Simplex Float64 backend with a pre-allocated
 # Returns
 - `Float64` EMD value.
 """
-function emd_ns64!(ws::EMDWorkspace{V},
+function emd_ns64!(ws::EMDWorkspace{Float64},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
                    metric::GroundMetric = ws.metric,
-                   strict::Bool = false) where V
-    return _emd_backend!(Float64, ws, ev0, ev1;
-            arc_mixing=false, backend=:ns64, context="emd_ns64!",
-            gdim, n_iter_max, metric, strict)
+                   strict::Bool = false)
+    return _emd_backend!(NS64, ws, ev0, ev1;
+                         gdim, n_iter_max, metric, strict)
 end
 
 """
@@ -419,10 +426,9 @@ function emd_ns64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   metric::GroundMetric = EuclideanMetric(),
                   return_flow::Bool = false,
                   strict::Bool = false)
-    return _emd_backend(Float64, ev0, ev1;
-                    arc_mixing=false, backend=:ns64, context="emd_ns64",
-                    R, beta, norm, gdim, n_iter_max, metric, return_flow,
-                    strict)
+    return _emd_backend(NS64, ev0, ev1;
+                        R, beta, norm, gdim, n_iter_max, metric, return_flow,
+                        strict)
 end
 
 # ─────────────────────────────────────────────────────────────────────
@@ -436,15 +442,14 @@ Compute EMD using the OT-style Float64 backend (arc mixing enabled).
 Uses the same NetworkSimplex solver but with POT-style arc interleaving
 for improved performance on unbalanced transport problems.
 """
-function emd_ot64!(ws::EMDWorkspace{V},
+function emd_ot64!(ws::EMDWorkspace{Float64},
                    ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                    gdim::Union{Nothing,Int} = nothing,
                    n_iter_max::Int = 100_000,
                    metric::GroundMetric = ws.metric,
-                   strict::Bool = false) where V
-    return _emd_backend!(Float64, ws, ev0, ev1;
-        arc_mixing=true, backend=:ot64, context="emd_ot64!",
-        gdim, n_iter_max, metric, strict)
+                   strict::Bool = false)
+    return _emd_backend!(OT64, ws, ev0, ev1;
+                         gdim, n_iter_max, metric, strict)
 end
 
 """
@@ -464,8 +469,7 @@ function emd_ot64(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   metric::GroundMetric = EuclideanMetric(),
                   return_flow::Bool = false,
                   strict::Bool = false)
-    return _emd_backend(Float64, ev0, ev1;
-                        arc_mixing=true, backend=:ot64, context="emd_ot64",
+    return _emd_backend(OT64, ev0, ev1;
                         R, beta, norm, gdim, n_iter_max, metric, return_flow,
                         strict)
 end
@@ -488,9 +492,8 @@ function emd_ns32!(ws::EMDWorkspace{Float32},
                    n_iter_max::Int = 100_000,
                    metric::GroundMetric = ws.metric,
                    strict::Bool = false)
-    return _emd_backend!(Float32, ws, ev0, ev1;
-            arc_mixing=false, backend=:ns32, context="emd_ns32!",
-            gdim, n_iter_max, metric, strict)
+    return _emd_backend!(NS32, ws, ev0, ev1;
+                         gdim, n_iter_max, metric, strict)
 end
 
 """
@@ -510,8 +513,7 @@ function emd_ns32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   metric::GroundMetric = EuclideanMetric(),
                   return_flow::Bool = false,
                   strict::Bool = false)
-    return _emd_backend(Float32, ev0, ev1;
-                        arc_mixing=false, backend=:ns32, context="emd_ns32",
+    return _emd_backend(NS32, ev0, ev1;
                         R, beta, norm, gdim, n_iter_max, metric, return_flow,
                         strict)
 end
@@ -529,9 +531,8 @@ function emd_ot32!(ws::EMDWorkspace{Float32},
                    n_iter_max::Int = 100_000,
                    metric::GroundMetric = ws.metric,
                    strict::Bool = false)
-    return _emd_backend!(Float32, ws, ev0, ev1;
-        arc_mixing=true, backend=:ot32, context="emd_ot32!",
-        gdim, n_iter_max, metric, strict)
+    return _emd_backend!(OT32, ws, ev0, ev1;
+                         gdim, n_iter_max, metric, strict)
 end
 
 """
@@ -551,8 +552,7 @@ function emd_ot32(ev0::AbstractMatrix{<:Real}, ev1::AbstractMatrix{<:Real};
                   metric::GroundMetric = EuclideanMetric(),
                   return_flow::Bool = false,
                   strict::Bool = false)
-    return _emd_backend(Float32, ev0, ev1;
-                        arc_mixing=true, backend=:ot32, context="emd_ot32",
+    return _emd_backend(OT32, ev0, ev1;
                         R, beta, norm, gdim, n_iter_max, metric, return_flow,
                         strict)
 end
