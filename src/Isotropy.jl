@@ -175,9 +175,27 @@ Physics preselection for hadron-collider isotropy: keep particles with
 particles. This is a deliberate acceptance choice and should be applied
 consistently when comparing implementations.
 """
-select_rapidity(events, ymax::Real; min_particles::Int=2) =
-    [ev[abs.(ev[:, 2]) .<= ymax, :] for ev in events
-     if count(abs.(ev[:, 2]) .<= ymax) >= min_particles]
+function select_rapidity(events, ymax::Real; min_particles::Int=2)
+    isempty(events) && return Matrix{Float64}[]
+    T = eltype(first(events))
+    selected = Vector{Matrix{T}}()
+    for ev in events
+        n = size(ev, 1)
+        mask = falses(n)
+        count = 0
+        @inbounds for i in 1:n
+            y = ev[i, 2]
+            if abs(y) <= ymax
+                mask[i] = true
+                count += 1
+            end
+        end
+        if count >= min_particles
+            push!(selected, ev[mask, :])
+        end
+    end
+    return selected
+end
 
 """
     select_sphere_events(events; min_particles=2) -> Vector{Matrix}
@@ -190,20 +208,37 @@ select_sphere_events(events; min_particles::Int=2) =
     [se for ev in events for se in (_sphere_event(ev),) if size(se, 1) >= min_particles]
 
 function _recoil_correct_ring(event::AbstractMatrix{<:Real})
-    qx = sum(event[:, 1] .* cos.(event[:, 2]))
-    qy = sum(event[:, 1] .* sin.(event[:, 2]))
+    qx = 0.0
+    qy = 0.0
+    @inbounds for i in 1:size(event, 1)
+        w = event[i, 1]
+        phi = event[i, 2]
+        qx += w * cos(phi)
+        qy += w * sin(phi)
+    end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = reshape([mag, atan(-qy, -qx)], 1, 2)
+    recoil = Matrix{Float64}(undef, 1, 2)
+    recoil[1, 1] = mag
+    recoil[1, 2] = atan(-qy, -qx)
     return vcat(event, recoil)
 end
 
 function _recoil_correct_cylinder(event::AbstractMatrix{<:Real})
-    qx = sum(event[:, 1] .* cos.(event[:, 3]))
-    qy = sum(event[:, 1] .* sin.(event[:, 3]))
+    qx = 0.0
+    qy = 0.0
+    @inbounds for i in 1:size(event, 1)
+        w = event[i, 1]
+        phi = event[i, 3]
+        qx += w * cos(phi)
+        qy += w * sin(phi)
+    end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = reshape([mag, 0.0, atan(-qy, -qx)], 1, 3)
+    recoil = Matrix{Float64}(undef, 1, 3)
+    recoil[1, 1] = mag
+    recoil[1, 2] = 0.0
+    recoil[1, 3] = atan(-qy, -qx)
     return vcat(event, recoil)
 end
 
