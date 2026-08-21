@@ -3,6 +3,8 @@ message: "If you use this software, please cite it as below."
 title: "EnergyFlow.jl"
 type: software
 version: "0.1.0"
+doi: "10.5281/zenodo.22049386"
+date-released: 2026-08-21
 abstract: >-
   A Julia package for computing the Energy Mover's Distance between collider
   events, with exact and approximate optimal-transport backends, configurable
@@ -15,12 +17,15 @@ keywords:
 authors:
   - family-names: LeBlanc
     given-names: Matt
+    affiliation: "Brown University"
     orcid: "https://orcid.org/0000-0001-5977-6418"
   - family-names: Li
     given-names: Hanting
+    affiliation: "Brown University"
     orcid: "https://orcid.org/0009-0000-9518-6255"
   - family-names: Wang
     given-names: Haochen
+    affiliation: "Brown University"
     orcid: "https://orcid.org/0009-0002-8496-2284"
 license: MIT
 repository-code: "https://github.com/leblanc-lab/EnergyFlow.jl"
