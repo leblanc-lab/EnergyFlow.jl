@@ -4,6 +4,7 @@
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://leblanc-lab.github.io/EnergyFlow.jl/dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22049385.svg)](https://doi.org/10.5281/zenodo.22049385)
 
 EnergyFlow.jl computes the **Energy Mover's Distance (EMD)** between collider
 events. It provides exact and approximate optimal-transport solvers, several
@@ -99,5 +100,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 If you use EnergyFlow.jl in research, cite the software using
 [`CITATION.cff`](CITATION.cff) and cite the original EMD paper listed in the
 [documentation](https://leblanc-lab.github.io/EnergyFlow.jl/stable/).
+Archived releases are available through the
+[Zenodo record for all versions](https://doi.org/10.5281/zenodo.22049385).
 
 EnergyFlow.jl is released under the [MIT License](LICENSE). See the [third-party notices](THIRD_PARTY_NOTICE.md) for adapted code and sample-data attribution.
