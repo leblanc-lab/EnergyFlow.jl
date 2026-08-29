@@ -176,8 +176,8 @@ particles. This is a deliberate acceptance choice and should be applied
 consistently when comparing implementations.
 """
 function select_rapidity(events, ymax::Real; min_particles::Int=2)
-    isempty(events) && return Matrix{Float64}[]
-    T = eltype(first(events))
+    T = eltype(eltype(events))
+    isempty(events) && return Matrix{T}[]
     selected = Vector{Matrix{T}}()
     for ev in events
         n = size(ev, 1)
@@ -208,8 +208,9 @@ select_sphere_events(events; min_particles::Int=2) =
     [se for ev in events for se in (_sphere_event(ev),) if size(se, 1) >= min_particles]
 
 function _recoil_correct_ring(event::AbstractMatrix{<:Real})
-    qx = 0.0
-    qy = 0.0
+    T = float(eltype(event))
+    qx = zero(T)
+    qy = zero(T)
     @inbounds for i in 1:size(event, 1)
         w = event[i, 1]
         phi = event[i, 2]
@@ -218,15 +219,16 @@ function _recoil_correct_ring(event::AbstractMatrix{<:Real})
     end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = Matrix{Float64}(undef, 1, 2)
+    recoil = Matrix{T}(undef, 1, 2)
     recoil[1, 1] = mag
     recoil[1, 2] = atan(-qy, -qx)
     return vcat(event, recoil)
 end
 
 function _recoil_correct_cylinder(event::AbstractMatrix{<:Real})
-    qx = 0.0
-    qy = 0.0
+    T = float(eltype(event))
+    qx = zero(T)
+    qy = zero(T)
     @inbounds for i in 1:size(event, 1)
         w = event[i, 1]
         phi = event[i, 3]
@@ -235,7 +237,7 @@ function _recoil_correct_cylinder(event::AbstractMatrix{<:Real})
     end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = Matrix{Float64}(undef, 1, 3)
+    recoil = Matrix{T}(undef, 1, 3)
     recoil[1, 1] = mag
     recoil[1, 2] = 0.0
     recoil[1, 3] = atan(-qy, -qx)
