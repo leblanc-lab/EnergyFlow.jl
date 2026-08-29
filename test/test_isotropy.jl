@@ -38,6 +38,12 @@ using EnergyFlow
         @test length(selected) == 1
         @test size(selected[1], 1) == 2
 
+        empty32 = Matrix{Float32}[]
+        @test typeof(select_rapidity(empty32, 1f0)) === typeof(empty32)
+
+        events32 = [Float32[1 0; 1 0]]
+        @test eltype(select_rapidity(events32, 1f0)[1]) === Float32
+
         sphere_events = [
             [1.0 1.0 0.0 0.0; 2.0 0.0 0.0 0.0; 1.0 0.0 1.0 0.0],
             [1.0 0.0 0.0 0.0],
@@ -45,6 +51,18 @@ using EnergyFlow
         sphere_selected = select_sphere_events(sphere_events)
         @test length(sphere_selected) == 1
         @test size(sphere_selected[1], 1) == 2
+    end
+
+    @testset "recoil correction types" begin
+        ring_event = Float32[1 0; 2 1]
+        cylinder_event = Float32[1 0 0; 2 1 1]
+        sphere_event = Float32[1 1 0 0; 2 0 1 0]
+        @test eltype(EnergyFlow._recoil_correct_ring(ring_event)) === Float32
+        @test eltype(EnergyFlow._recoil_correct_cylinder(cylinder_event)) === Float32
+        @test eltype(EnergyFlow._recoil_correct_sphere(sphere_event)) === Float32
+        @test eltype(EnergyFlow._recoil_correct_ring([1 0; 2 1])) === Float64
+        @test eltype(EnergyFlow._recoil_correct_cylinder([1 0 0; 2 1 1])) === Float64
+        @test eltype(EnergyFlow._recoil_correct_sphere([1 1 0 0; 2 0 1 0])) === Float64
     end
 
     @testset "convenience wrapper" begin

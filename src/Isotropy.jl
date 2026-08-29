@@ -12,7 +12,13 @@ wrap_dphi(a, b) = (d = abs(a - b); π - abs(mod(d, 2π) - π))
 _ring_event(ev) = ev[:, [1, 3]]
 
 function _sphere_event(ev)
-    mask = vec(sum(abs2, @view(ev[:, 2:4]); dims=2)) .> 0
+    mask = falses(size(ev, 1))
+    @inbounds for i in axes(ev, 1)
+        px = ev[i, 2]
+        py = ev[i, 3]
+        pz = ev[i, 4]
+        mask[i] = px * px + py * py + pz * pz > 0
+    end
     return ev[mask, :]
 end
 
@@ -175,9 +181,24 @@ Physics preselection for hadron-collider isotropy: keep particles with
 particles. This is a deliberate acceptance choice and should be applied
 consistently when comparing implementations.
 """
-select_rapidity(events, ymax::Real; min_particles::Int=2) =
-    [ev[abs.(ev[:, 2]) .<= ymax, :] for ev in events
-     if count(abs.(ev[:, 2]) .<= ymax) >= min_particles]
+function select_rapidity(events, ymax::Real; min_particles::Int=2)
+    T = eltype(eltype(events))
+    isempty(events) && return Matrix{T}[]
+    selected = Vector{Matrix{T}}()
+    for ev in events
+        n = size(ev, 1)
+        mask = falses(n)
+        count = 0
+        @inbounds for i in 1:n
+            if abs(ev[i, 2]) <= ymax
+                mask[i] = true
+                count += 1
+            end
+        end
+        count >= min_particles && push!(selected, ev[mask, :])
+    end
+    return selected
+end
 
 """
     select_sphere_events(events; min_particles=2) -> Vector{Matrix}
@@ -190,31 +211,69 @@ select_sphere_events(events; min_particles::Int=2) =
     [se for ev in events for se in (_sphere_event(ev),) if size(se, 1) >= min_particles]
 
 function _recoil_correct_ring(event::AbstractMatrix{<:Real})
-    qx = sum(event[:, 1] .* cos.(event[:, 2]))
-    qy = sum(event[:, 1] .* sin.(event[:, 2]))
+    T = float(eltype(event))
+    qx = zero(T)
+    qy = zero(T)
+    @inbounds for i in axes(event, 1)
+        w = event[i, 1]
+        phi = event[i, 2]
+        qx += w * cos(phi)
+        qy += w * sin(phi)
+    end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = reshape([mag, atan(-qy, -qx)], 1, 2)
-    return vcat(event, recoil)
+    corrected = Matrix{T}(undef, size(event, 1) + 1, 2)
+    @inbounds for j in 1:2, i in axes(event, 1)
+        corrected[i, j] = event[i, j]
+    end
+    corrected[end, 1] = mag
+    corrected[end, 2] = atan(-qy, -qx)
+    return corrected
 end
 
 function _recoil_correct_cylinder(event::AbstractMatrix{<:Real})
-    qx = sum(event[:, 1] .* cos.(event[:, 3]))
-    qy = sum(event[:, 1] .* sin.(event[:, 3]))
+    T = float(eltype(event))
+    qx = zero(T)
+    qy = zero(T)
+    @inbounds for i in axes(event, 1)
+        w = event[i, 1]
+        phi = event[i, 3]
+        qx += w * cos(phi)
+        qy += w * sin(phi)
+    end
     mag = hypot(qx, qy)
     mag == 0 && return event
-    recoil = reshape([mag, 0.0, atan(-qy, -qx)], 1, 3)
-    return vcat(event, recoil)
+    corrected = Matrix{T}(undef, size(event, 1) + 1, 3)
+    @inbounds for j in 1:3, i in axes(event, 1)
+        corrected[i, j] = event[i, j]
+    end
+    corrected[end, 1] = mag
+    corrected[end, 2] = zero(T)
+    corrected[end, 3] = atan(-qy, -qx)
+    return corrected
 end
 
 function _recoil_correct_sphere(event::AbstractMatrix{<:Real})
-    px = sum(event[:, 2])
-    py = sum(event[:, 3])
-    pz = sum(event[:, 4])
+    T = float(eltype(event))
+    px = zero(T)
+    py = zero(T)
+    pz = zero(T)
+    @inbounds for i in axes(event, 1)
+        px += event[i, 2]
+        py += event[i, 3]
+        pz += event[i, 4]
+    end
     mag = sqrt(px * px + py * py + pz * pz)
     mag == 0 && return event
-    recoil = reshape([mag, -px, -py, -pz], 1, 4)
-    return vcat(event, recoil)
+    corrected = Matrix{T}(undef, size(event, 1) + 1, 4)
+    @inbounds for j in 1:4, i in axes(event, 1)
+        corrected[i, j] = event[i, j]
+    end
+    corrected[end, 1] = mag
+    corrected[end, 2] = -px
+    corrected[end, 3] = -py
+    corrected[end, 4] = -pz
+    return corrected
 end
 
 function _maybe_recoil_correct(event::AbstractMatrix{<:Real}, ref::AbstractMatrix{<:Real}, recoil::Bool)
@@ -288,7 +347,11 @@ function event_isotropy(event::AbstractMatrix{<:Real};
                               backend=backend, n_iter_max=n_iter_max)
     elseif geometry === :cylinder
         ev = _isotropy_event_view(event, :cylinder)
-        ev = ev[abs.(ev[:, 2]) .<= ymax, :]
+        mask = falses(size(ev, 1))
+        @inbounds for i in axes(ev, 1)
+            mask[i] = abs(ev[i, 2]) <= ymax
+        end
+        ev = ev[mask, :]
         size(ev, 1) >= 2 || error("Cylinder isotropy requires at least 2 particles after |y| ≤ $ymax selection")
         ref = cylinder_reference(nphi, ymax)
         return event_isotropy(_maybe_recoil_correct(ev, ref, recoil), ref, cylinder_metric(ymax);
