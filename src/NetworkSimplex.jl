@@ -257,18 +257,20 @@ function network_simplex!(ns::NetworkSimplexSolver{V},
 
     # ── Set supply values ─────────────────────────────────────────────────────
     @inbounds begin
-        sum_s = zero(V)
         for i in 1:n0
             s = source_weights[i]
             ns.supply[i] = s
-            sum_s += s
         end
         for j in 1:n1
             s = -target_weights[j]
             ns.supply[n0 + j] = s
-            sum_s += s
         end
         ns.supply[root] = zero(V)
+
+        # Sum the two positive measures separately using pairwise reduction.
+        # Sequentially subtracting tens of thousands of small target weights
+        # from an O(1) source sum can exceed the balance tolerance by roundoff.
+        sum_s = sum(source_weights) - sum(target_weights)
 
         if abs(sum_s) > ns.epsilon_large
             ns.status = :supply_mismatch
